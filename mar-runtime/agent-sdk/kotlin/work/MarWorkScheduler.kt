@@ -45,13 +45,23 @@ class MarWorkScheduler(private val context: Context) {
     /**
      * Trigger an Agent immediately (e.g. via quick settings Intent or Termux CLI).
      */
-    fun executeAgentNow(agentId: String) {
+    fun executeAgentNow(agentId: String, userIntent: String? = null) {
+        val dataBuilder = Data.Builder().putString(MarAgentWorker.KEY_AGENT_ID, agentId)
+        if (userIntent != null) {
+            dataBuilder.putString("user_intent", userIntent)
+        }
+
         val workRequest = OneTimeWorkRequestBuilder<MarAgentWorker>()
-            .setInputData(workDataOf(MarAgentWorker.KEY_AGENT_ID to agentId))
+            .setInputData(dataBuilder.build())
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST) // Use Android 12+ Expedited Job if quota allows
+            .addTag("mar_agent_$agentId")
             .build()
 
-        workManager.enqueue(workRequest)
+        workManager.enqueueUniqueWork(
+            "unique_agent_$agentId",
+            ExistingWorkPolicy.REPLACE,
+            workRequest
+        )
     }
 
     /**

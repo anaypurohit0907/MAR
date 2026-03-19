@@ -18,6 +18,11 @@ object MarBridge {
     external fun initialize(maxRamMb: Int, threads: Int): Boolean
 
     /**
+     * Loads the SLM model from the given path into native memory.
+     */
+    external fun loadModel(modelPath: String): Boolean
+
+    /**
      * Test primitive for the native inference loop.
      * @param prompt The incoming serialized EAP Observation or prompt.
      * @return The serialized next ToolCall or EAP Message.

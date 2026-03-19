@@ -8,11 +8,47 @@ This guide covers everything you need to know to compile the Mobile Agent Runtim
 
 Before building, ensure your local development environment has the necessary toolchains for our cross-language architecture.
 
-### 1. Install Android dependencies
-*   **Android Studio** (Latest stable version)
-*   **Android NDK** (Side-by-side version `26.x` recommended, installable via Android Studio SDK Manager)
-*   **CMake** (Installable via Android Studio SDK Manager)
-*   **ADB** (Android Debug Bridge)
+### 1. Install Android dependencies (Linux)
+
+**Installing Android Studio (from .tar.gz)**
+If you downloaded the official `android-studio-*.tar.gz` from the Google Developer site, follow these steps to extract and run it:
+```bash
+# Extract the archive into your /opt directory (recommended for external software)
+sudo tar -xzf ~/Downloads/android-studio-*.tar.gz -C /opt/
+
+# Start Android Studio setup wizard
+/opt/android-studio/bin/studio.sh
+```
+*Note: During the initial setup wizard, Android Studio will offer to automatically download the Android SDK, Build Tools, and Emulator images. Allow it to do so.*
+
+**ADB (Android Debug Bridge)**
+If Android Studio didn't link `adb` to your global path, or if you prefer the standard system package:
+```bash
+# Ubuntu/Debian
+sudo apt-get update
+sudo apt-get install android-tools-adb -y
+
+# Fedora
+sudo dnf install android-tools -y
+```
+
+**CMake & Standard Build Tools**
+```bash
+# Ubuntu/Debian
+sudo apt-get install build-essential cmake -y
+
+# Fedora
+sudo dnf install gcc gcc-c++ make cmake -y
+```
+
+**Android NDK (Command Line Install)**
+If you are building strictly from the command line without Android Studio:
+```bash
+wget https://dl.google.com/android/repository/android-ndk-r26c-linux.zip
+unzip android-ndk-r26c-linux.zip -d ~/android-sdk/ndk/
+export ANDROID_NDK_HOME=~/android-sdk/ndk/android-ndk-r26c
+```
+*(Alternatively, simply open Android Studio -> Tools -> SDK Manager -> SDK Tools -> Check `NDK (Side by side)` and `CMake`)*
 
 ### 2. Install Rust
 Install Rust using `rustup` to build the core DAG engine:

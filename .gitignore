@@ -39,3 +39,17 @@ Thumbs.db
 *.swp
 *~
 .vscode/
+
+# Large binaries, models, and archives
+*.zip
+*.tar.gz
+*.rar
+*.gguf
+*.bin
+*.pt
+*.safetensors
+android-ndk-*/
+
+# Git overrides
+mar-runtime/native/llama.cpp/
+llama.cpp/

@@ -4,6 +4,7 @@ import android.app.Activity
 import android.os.Bundle
 import android.widget.Toast
 import android.net.Uri
+import android.content.Intent
 
 /**
  * Intercepts intent schemes (e.g. mar-agent://install or matching .yaml files) 

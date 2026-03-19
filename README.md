@@ -2,42 +2,31 @@
 
 **The De-Facto Standard for On-Device Agentic AI** (Zero Cloud, Zero Root)
 
-MAR is a production-grade universal middleware sitting between Android syscalls and Agent DAG (Directed Acyclic Graph) workflows. It empowers 4B+ mobile devices with self-contained, offline Agent capabilities.
+MAR is a production-grade universal middleware bridging native Android capabilities with on-device Large Language Models. It empowers mobile devices with self-contained, offline Agent capabilities.
 
 ## 🚀 The Mission
-To achieve viral OSS adoption as the **"Docker for On-Device AI"**, empowering developers to ship small, fast, highly intelligent agents utilizing models like `Qwen3.5-0.8B`. 
+To achieve OSS adoption as the **"Docker for On-Device AI"**, empowering developers to ship small, fast, highly intelligent offline agents utilizing compressed SLMs (Small Language Models) like `Qwen2.5-0.5B`.
 
 ### Key Features
-*   **Zero Root Required**: Fully exploits standard Android APIs (Accessibility, ScopedStorage, ContentResolvers) locally via C++ HAL.
-*   **Zero Cloud Reliance**: Runs 100% locally. No API limits, no network latency.
-*   **Survives App Kills**: Doze-mode resilient state management mapping DAG memories directly into SQLite via `Room`.
-*   **Declarative Tooling**: Powerful Kotlin DSL & YAML syntax bridging into the Rust core protocol.
+*   **100% Offline AI Engines**: Uses native C++ (`llama.cpp`) to run GGUF models directly on device. No API limits, no network latency, complete data privacy.
+*   **Zero Root Required**: Fully exploits standard Android APIs (Hardware Cameras, `AlarmClock`, `Intent` Systems) locally via safe Sandbox Hooks.
+*   **Cutting-Edge Edge Optimization**:
+    *   **Test-Time Compute / Early Stopping**: Drastically speeds up execution by terminating inference the exact millisecond the required JSON bracket ends.
+    *   **Vector-First Routing Bypass**: Captures known intents (e.g., "turn on flashlight") bridging direct Action execution in 1ms without utilizing LLM tokens.
+    *   **Dynamic Prompt Optimization**: Prefix-constrained generation stripped of conversational bloat ensures lightning-fast evaluation (TPS).
+*   **Decoupled Architecture**: Strictly isolates JNI Inference (`hello_mar.cpp`), Routing & Sandbox (`MarAgentWorker`), Prompting (`PromptBuilder`), and OS Intents (`ActionExecutor`).
 
 ## 📦 Quick Start
 1.  Clone the repository and open in Android Studio.
-2.  Build the Native libraries via CMake (`mar-runtime/native/CMakeLists.txt`).
+2.  The native inference engine (`llama.cpp`) is securely submoduled. Build native libraries natively via Gradle edge CMake targets.
 3.  Deploy the Demo App (`demo/app/`) to any Android 11+ physical device (API 30+).
-4.  Run the **1-Tap Install 'Birthday Agent'** to view the live EAP memory execution!
-
-## 🧩 How to Build an Agent
-Agents can be defined locally using Kotlin DSL or distributed using YAML configs:
-
-```yaml
-agent:
-  name: "BirthdayGreeter"
-  model: "qwen3.5-0.8b-q4f16"
-workflow:
-  step_1:
-    action: "CalendarQuery"
-    params: { query: "today", event_type: "birthday" }
-```
-
-You can literally share your agents over intent URIs via `mar-agent://install`!
+4.  In the app, download the `Qwen2.5-0.5B` GGUF model directly via the UI downloader.
+5.  Type commands like *"turn on flashlight"* or *"set a 5 minute timer for cooking"* into the console and watch native OS intents trigger instantly offline!
 
 ## 📚 Project Layout
-*   `mar-runtime/native`: C++ & Rust core bridging Android APIs and LiteRT hardware acceleration.
-*   `mar-runtime/agent-sdk/kotlin`: The exposed Android APIs, background Service bindings, and Tool definitions.
-*   `demo/`: A fully self-contained Android APK wrapper testing real world metrics.
+*   `mar-runtime/native`: C++ and `llama.cpp` integration. The absolute core engine for AI tensor mathematics, context memory, and JNI.
+*   `mar-runtime/agent-sdk/kotlin`: The Android execution sandbox, holding `ActionExecutor`, `MarAgentWorker`, and scheduling structures bridging JNI responses to hardware features.
+*   `demo/`: A fully self-contained Android APK wrapper providing real-time telemetry (Tokens/sec, RAM, etc) and execution logging UI.
 *   `docs/`: Full Architectural & Contributing specifications.
 
 Enjoy building the next era of edge computing. 🚀

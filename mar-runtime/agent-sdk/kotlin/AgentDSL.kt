@@ -1,5 +1,7 @@
 package com.mar.agent.sdk
 
+import com.mar.agent.sdk.tools.*
+
 // --- MAR Agent Abstraction Layer (Layer 3) ---
 
 /**
@@ -62,8 +64,6 @@ fun agent(name: String, init: AgentBuilder.() -> Unit): MarAgent {
     builder.init()
     return builder.build()
 }
-
-import com.mar.agent.sdk.tools.*
 
 /**
  * Example definition:
