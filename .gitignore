@@ -1,0 +1,41 @@
+# Android/Kotlin
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+bin/
+gen/
+out/
+.gradle/
+build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.iml
+.idea/
+
+# Rust / Cargo
+target/
+**/*.rs.bk
+*.pdb
+*.lib
+*.exp
+
+# C / C++ / CMake
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.vscode/

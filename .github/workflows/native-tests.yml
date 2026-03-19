@@ -1,0 +1,29 @@
+name: Native MAR Core Build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+        targets: aarch64-linux-android
+
+    - name: Cargo Test (DAG Logic)
+      run: cd mar-runtime/native && cargo test
+
+    - name: Build C++ with CMake (Mock NDK setup)
+      run: |
+        cd mar-runtime/native
+        mkdir -p build && cd build
+        cmake ..
+        make

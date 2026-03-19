@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (X11; Linux x86_64; rv:148.0) Gecko/20100101 Firefox/148.0" version="29.6.4">
+  <diagram name="Page-1" id="ZePfdtPyvC5r7AoAkEfS">
+    <mxGraphModel dx="1554" dy="866" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="3300" pageHeight="4681" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="demoApp" value="Demo Android App&amp;#xa;(MainActivity, YamlShareActivity)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="340" y="40" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="sdkGroup" value="Agent SDK (Kotlin)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="140" y="160" width="600" height="260" as="geometry" />
+        </mxCell>
+        <mxCell id="dslYaml" value="Agent DSL &amp;amp; YAML Parser&amp;#xa;(BirthdayAgent / parser)" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="sdkGroup">
+          <mxGeometry x="30" y="50" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="tools" value="Tools&amp;#xa;(Calendar, Search, UITap)" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="sdkGroup">
+          <mxGeometry x="220" y="50" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="scheduling" value="Scheduling &amp;amp; Storage&amp;#xa;(WorkManager, Room DB)" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="sdkGroup">
+          <mxGeometry x="410" y="50" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="cliUi" value="CLI &amp;amp; OS UI Hooks&amp;#xa;(TermuxCli, Notifications)" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="sdkGroup">
+          <mxGeometry x="30" y="160" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="marBridge" value="MarBridge&amp;#xa;(Core Integration)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="sdkGroup">
+          <mxGeometry x="220" y="160" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="telemetry" value="Telemetry&amp;#xa;(LiveMetricsTracker)" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="sdkGroup">
+          <mxGeometry x="410" y="160" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="edgeDslToBridge" edge="1" parent="sdkGroup" source="dslYaml" target="marBridge">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edgeToolsToBridge" edge="1" parent="sdkGroup" source="tools" target="marBridge">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edgeBridgeToTelemetry" edge="1" parent="sdkGroup" source="marBridge" target="telemetry">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="nativeGroup" value="Native Runtime (C++ / Rust)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="140" y="480" width="600" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="eap" value="Protobuf API (eap.proto)" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="nativeGroup">
+          <mxGeometry x="220" y="40" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="workflow" value="Workflow Engine&amp;#xa;(workflow_dag.rs)" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="nativeGroup">
+          <mxGeometry x="30" y="100" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="inference" value="Inference Bridge&amp;#xa;(litert_bridge.cpp)" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="nativeGroup">
+          <mxGeometry x="220" y="100" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="hal" value="HAL &amp;amp; Syscalls&amp;#xa;(syscall_bridge.cpp)" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="nativeGroup">
+          <mxGeometry x="410" y="100" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="edgeEapToInference" edge="1" parent="nativeGroup" source="eap" target="inference">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edgeAppToSdk" edge="1" parent="1" source="demoApp" target="sdkGroup">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edgeBridgeToNative" edge="1" parent="1" source="marBridge" target="eap">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

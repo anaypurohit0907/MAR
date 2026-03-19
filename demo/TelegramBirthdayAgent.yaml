@@ -1,0 +1,42 @@
+agent:
+  name: "BirthdayGreeterTelegram"
+  version: "1.1.0"
+  description: "Cross-app Port: Runs daily to find birthdays, draft messages, and send them via Telegram instead of WhatsApp."
+  
+hardware_requirements:
+  min_ram_mb: 1024
+  model: "qwen3.5-0.8b-q4f16"
+
+triggers:
+  - type: alarm_manager
+    schedule: "0 8 * * *" # Every day at 8:00 AM
+    
+tools:
+  - name: CalendarQuery
+    type: content_resolver
+    uri: "content://com.android.calendar/events"
+  - name: UITapper
+    type: accessibility_service
+
+workflow:
+  step_1:
+    action: "CalendarQuery"
+    params:
+      query: "today"
+      event_type: "birthday"
+    on_success: "step_2"
+    on_empty: "exit"
+    
+  step_2:
+    action: "llm_draft_message"
+    prompt: "Draft a short, friendly birthday message for {step_1.output.name}."
+    on_success: "step_3"
+    
+  step_3:
+    action: "UITapper"
+    params:
+      app: "org.telegram.messenger" # Ported target application
+      target_contact: "{step_1.output.name}"
+      input_text: "{step_2.output.draft_text}"
+      action: "send_message"
+    on_success: "log_success"

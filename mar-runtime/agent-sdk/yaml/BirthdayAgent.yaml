@@ -1,0 +1,50 @@
+agent:
+  name: "BirthdayGreeter"
+  version: "1.0.0"
+  description: "Runs daily to find birthdays, draft messages, and send them via WhatsApp."
+  
+hardware_requirements:
+  min_ram_mb: 1024
+  model: "qwen3.5-0.8b-q4f16"
+
+triggers:
+  - type: alarm_manager
+    schedule: "0 8 * * *" # Every day at 8:00 AM
+    
+tools:
+  - name: CalendarQuery
+    type: content_resolver
+    uri: "content://com.android.calendar/events"
+    permissions: ["android.permission.READ_CALENDAR"]
+    
+  - name: ContactsQuery
+    type: content_resolver
+    uri: "content://com.android.contacts/data"
+    permissions: ["android.permission.READ_CONTACTS"]
+    
+  - name: UITapper
+    type: accessibility_service
+    permissions: ["android.permission.BIND_ACCESSIBILITY_SERVICE"]
+
+workflow:
+  step_1:
+    action: "CalendarQuery"
+    params:
+      query: "today"
+      event_type: "birthday"
+    on_success: "step_2"
+    on_empty: "exit"
+    
+  step_2:
+    action: "llm_draft_message"
+    prompt: "Draft a short, friendly birthday message for {step_1.output.name}. Keep it under 20 words."
+    on_success: "step_3"
+    
+  step_3:
+    action: "UITapper"
+    params:
+      app: "com.whatsapp"
+      target_contact: "{step_1.output.name}"
+      input_text: "{step_2.output.draft_text}"
+      action: "send"
+    on_success: "log_success"
