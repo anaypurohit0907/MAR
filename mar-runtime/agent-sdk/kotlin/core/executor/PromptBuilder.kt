@@ -24,4 +24,19 @@ object PromptBuilder {
             <|im_start|>assistant
         """.trimIndent()
     }
+
+    /**
+     * Builds a standard context-aware prompt for open-ended generation (like drafting messages), 
+     * where JSON is not required.
+     */
+    fun buildSystemPrompt(userQuery: String, toolsJson: String = "[]"): String {
+         return """
+            <|im_start|>system
+            You are a helpful, brief AI assistant. Make no conversational filler.
+            <|im_end|>
+            <|im_start|>user
+            $userQuery<|im_end|>
+            <|im_start|>assistant
+        """.trimIndent()
+    }
 }

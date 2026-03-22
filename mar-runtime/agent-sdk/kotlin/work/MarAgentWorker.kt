@@ -5,6 +5,7 @@ import android.content.pm.ServiceInfo
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.ForegroundInfo
+import androidx.work.WorkManager
 import androidx.work.workDataOf
 import androidx.core.app.NotificationCompat
 import android.app.NotificationManager
@@ -17,8 +18,12 @@ import android.provider.AlarmClock
 import android.provider.Settings
 import org.json.JSONArray
 import com.mar.runtime.core.MarBridge
+import com.mar.runtime.core.MultiAgentRuntimeManager
 import com.mar.agent.sdk.core.executor.ActionExecutor
 import com.mar.agent.sdk.core.executor.PromptBuilder
+import com.mar.agent.sdk.yaml.parser.MarYamlParser
+import com.mar.agent.sdk.yaml.runner.WorkflowRunner
+import com.mar.agent.sdk.ui.AgentNotificationManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -42,46 +47,73 @@ class MarAgentWorker(
         setForeground(createForegroundInfo(agentId))
 
         try {
-            // 2. Init Native Bridge (Memory map LiteRT/Qwen weights)
-            val initialized = MarBridge.initialize(maxRamMb = 1024, threads = 4)
-            if (!initialized) {
-                return@withContext Result.failure()
-            }
+            val yamlWorkflow = inputData.getString("yaml_workflow")
 
-            // Load dynamically downloaded model if present
-            val modelPath = java.io.File(context.filesDir, "qwen2.5-0.5b.gguf").absolutePath
-            if (java.io.File(modelPath).exists()) {
-                MarBridge.loadModel(modelPath)
+            if (!yamlWorkflow.isNullOrBlank()) {
+                println("MAR Router: Yaml workflow detected! Starting Phase-3 Configured Agent execution.")
+                val parser = MarYamlParser()
+                val config = parser.parse(yamlWorkflow.byteInputStream())
+                val actionExecutor = ActionExecutor(context)
+                
+                val runner = WorkflowRunner(context, actionExecutor)
+                // Pass agent ID to populate UI progress bounds
+                runner.executeWorkflow(config, agentId)
+                
+                return@withContext Result.success(workDataOf("native_logs" to "YAML workflow finished."))
             }
 
             // User Intent that arrived from UI/Trigger
             val userIntent = inputData.getString("user_intent") ?: "set a timer for 10 minutes"
 
-            // 1. Vector-First Routing (No Prompt Bypass)
-            // Simulated local TF-IDF / keyword vector search against known cached tool intents.
-            // If cosine similarity > 0.85, we completely bypass the 0.5B LLM, saving 100% of compute time.
-            val response: String
-            if (userIntent.contains("flashlight", ignoreCase = true) || userIntent.contains("torch", ignoreCase = true)) {
-                println("MAR Router: Exact vector match found for '$userIntent'. BYPASSING LLM.")
-                response = """[{"action":"hardware_flashlight","state":"on"}]"""
-            } else {
-                println("MAR Router: No vector match. Falling back to LLM inference...")
+            var response = ""
+            var attempt = 0
+            val maxAttempts = 3
+            
+            // Vector Match Fallback - we try to AVOID THIS by prioritizing LLM Inference first!
+            val isVectorMatchFallback = userIntent.contains("flashlight", ignoreCase = true) || userIntent.contains("torch", ignoreCase = true)
+            
+            // Loop inference execution for Auto-Retries
+            while (response.isBlank() && attempt < maxAttempts) {
+                if (attempt > 0) {
+                     println("MAR Router: Retrying LLM inference... Attempt ${attempt + 1}")
+                     AgentNotificationManager.showAgentProgressNotification(context, agentId, "Retrying LLM Reasoning (Attempt ${attempt + 1}/$maxAttempts)...")
+                } else {
+                     AgentNotificationManager.showAgentProgressNotification(context, agentId, "Starting LLM Inference...")
+                }
                 
-                // 3. Dynamic Prompt Optimization: Ultra-compressed tool prompt to minimize token evaluation
+                // Dynamic Prompt Optimization
                 val triggerPrompt = PromptBuilder.buildActionPrompt(userIntent)
-
-                // 4. Run Execution Loop in native/Rust space (with Test-Time Compute early stopping)
-                val rawResponse = MarBridge.runInferenceTest(triggerPrompt)
-                response = rawResponse.replace("```json", "").replace("```", "").trim()
+                val rawResponse = MultiAgentRuntimeManager.executeInference(context, triggerPrompt)
+                
+                val cleaned = rawResponse.replace("```json", "").replace("```", "").trim()
+                if (cleaned.isNotBlank() && !cleaned.contains("{\"error\":")) {
+                    response = cleaned
+                }
+                attempt++
             }
             
+            // 5. Hard Fallback to "Static Inference" ONLY if LLM explicitly crashed out entirely after all retries
+            if (response.isBlank()) {
+                println("MAR Router: LLM collapsed entirely after $maxAttempts attempts.")
+                if (isVectorMatchFallback) {
+                    println("MAR Router: Exact vector match fallback used as LAST RESORT.")
+                    AgentNotificationManager.showAgentProgressNotification(context, agentId, "Falling back to static vector match...")
+                    response = """[{"action":"hardware_flashlight","state":"on"}]"""
+                } else {
+                    AgentNotificationManager.showAgentProgressNotification(context, agentId, "Agent Failed.")
+                    return@withContext Result.failure()
+                }
+            }
+
             // Log for developer tracing
             println("MAR Worker [$agentId] final response: $response")
 
             // PARSE AND EXECUTE ACTIONS
+            AgentNotificationManager.showAgentProgressNotification(context, agentId, "Executing identified Actions...")
             val actionExecutor = ActionExecutor(context)
             actionExecutor.executeActions(response)
-
+            
+            AgentNotificationManager.clearAgentNotification(context, agentId)
             Result.success(workDataOf("native_logs" to response))
         } catch (e: Exception) {
             e.printStackTrace()
@@ -94,32 +126,37 @@ class MarAgentWorker(
      */
     private fun createForegroundInfo(agentId: String): ForegroundInfo {
         val channelId = "mar_agent_channel"
+        val title = "MAR Agent Active"
+        val cancel = "Cancel"
+        
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                "MAR Agent Execution",
-                NotificationManager.IMPORTANCE_LOW
-            )
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val channel = NotificationChannel(channelId, title, NotificationManager.IMPORTANCE_LOW)
             notificationManager.createNotificationChannel(channel)
         }
 
-        val notification = NotificationCompat.Builder(context, channelId)
-            .setContentTitle("Agent Running: $agentId")
-            .setContentText("Processing tasks on-device...")
-            .setSmallIcon(android.R.drawable.ic_dialog_info) // Placeholder
-            .setOngoing(true)
-            .build()
+        val intent = WorkManager.getInstance(context).createCancelPendingIntent(id)
 
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ForegroundInfo(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        val notification = NotificationCompat.Builder(context, channelId)
+            .setContentTitle(title)
+            .setTicker(title)
+            .setContentText("Agent Task: $agentId is calculating state...")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setOngoing(true)
+            .addAction(android.R.drawable.ic_delete, cancel, intent)
+            .build()
+            
+        // For API 34+ specify data bound service types mapping accurately
+        val foregroundServiceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
         } else {
-            ForegroundInfo(NOTIFICATION_ID, notification)
+            0
         }
+            
+        return ForegroundInfo(1001, notification, foregroundServiceType)
     }
 
     companion object {
         const val KEY_AGENT_ID = "AGENT_ID"
-        const val NOTIFICATION_ID = 10101
     }
 }

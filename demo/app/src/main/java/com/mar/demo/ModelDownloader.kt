@@ -79,6 +79,34 @@ object ModelDownloader {
     
     fun getLocalModelPath(context: Context): String? {
         val file = File(context.filesDir, MODEL_FILENAME)
-        return if (file.exists()) file.absolutePath else null
+        if (file.exists()) return file.absolutePath
+        
+        try {
+            val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+            if (downloadsDir != null && downloadsDir.exists()) {
+                val gguf = findGgufRecursive(downloadsDir, 0)
+                if (gguf != null) return gguf.absolutePath
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        
+        return null
+    }
+
+    private fun findGgufRecursive(dir: File, depth: Int): File? {
+        if (depth > 3) return null
+        val files = dir.listFiles() ?: return null
+        
+        val ggufFile = files.firstOrNull { it.isFile && it.name.endsWith(".gguf") }
+        if (ggufFile != null) return ggufFile
+        
+        for (f in files) {
+            if (f.isDirectory) {
+                val found = findGgufRecursive(f, depth + 1)
+                if (found != null) return found
+            }
+        }
+        return null
     }
 }

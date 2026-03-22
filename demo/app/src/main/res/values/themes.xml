@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.MAR" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="colorPrimary">@color/kite_blue</item>
+        <item name="colorPrimaryDark">@color/kite_blue</item>
+        <item name="colorAccent">@color/kite_orange</item>
+        <item name="android:windowBackground">@color/kite_background</item>
+        <item name="android:textColorPrimary">@color/kite_text_primary</item>
+        <item name="android:textColorSecondary">@color/kite_text_secondary</item>
+        <!-- Support modern API windows -->
+        <item name="android:statusBarColor">@color/kite_surface_white</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

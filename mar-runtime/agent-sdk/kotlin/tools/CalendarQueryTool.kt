@@ -5,19 +5,15 @@ import android.content.Context
 import android.database.Cursor
 import android.net.Uri
 import android.provider.CalendarContract
-import com.mar.agent.sdk.MarTool
-import org.json.JSONArray
-import org.json.JSONObject
 import java.util.Calendar
 
 /**
  * Tool to safely query Android Calendar using ContentResolver.
  * Requires android.permission.READ_CALENDAR.
  */
-class CalendarQueryTool(private val context: Context) : MarTool("calendar_query") {
+class CalendarQueryTool(private val context: Context) {
 
-    override fun call(params: Map<String, Any>): String {
-        val todayOnly = params["today"] as? Boolean ?: true
+    fun queryEvents(query: String?, eventType: String?): Map<String, Any>? {
         val resolver: ContentResolver = context.contentResolver
         val uri: Uri = CalendarContract.Events.CONTENT_URI
 
@@ -40,33 +36,33 @@ class CalendarQueryTool(private val context: Context) : MarTool("calendar_query"
             set(Calendar.SECOND, 59)
         }
 
-        var selection: String? = null
-        var selectionArgs: Array<String>? = null
-
-        if (todayOnly) {
-            selection = "${CalendarContract.Events.DTSTART} >= ? AND ${CalendarContract.Events.DTSTART} <= ?"
-            selectionArgs = arrayOf(startOfDay.timeInMillis.toString(), endOfDay.timeInMillis.toString())
-        }
-
-        val jsonArray = JSONArray()
+        val selection = "${CalendarContract.Events.DTSTART} >= ? AND ${CalendarContract.Events.DTSTART} <= ?"
+        val selectionArgs = arrayOf(startOfDay.timeInMillis.toString(), endOfDay.timeInMillis.toString())
 
         try {
             val cursor: Cursor? = resolver.query(uri, projection, selection, selectionArgs, null)
             cursor?.use {
                 val titleIndex = it.getColumnIndex(CalendarContract.Events.TITLE)
-                val startIndex = it.getColumnIndex(CalendarContract.Events.DTSTART)
 
                 while (it.moveToNext()) {
-                    val eventObj = JSONObject()
-                    eventObj.put("title", it.getString(titleIndex))
-                    eventObj.put("timestamp", it.getLong(startIndex))
-                    jsonArray.put(eventObj)
+                    val title = it.getString(titleIndex)
+                    
+                    // Simple NLP check: does it match "Birthday"?
+                    if (eventType?.equals("birthday", ignoreCase = true) == true) {
+                        if (title.contains("birthday", ignoreCase = true)) {
+                            // Extract name (e.g. "Alice's Birthday" -> "Alice")
+                            val name = title.replace("(?i)'s birthday".toRegex(), "").trim()
+                            return mapOf("name" to name) // Matches {step_1.output.name}
+                        }
+                    } else if (query != null && title.contains(query, ignoreCase = true)) {
+                        return mapOf("title" to title)
+                    }
                 }
             }
         } catch (e: SecurityException) {
-            return JSONObject().put("error", "Missing READ_CALENDAR permission").toString()
+            return mapOf("error" to "Missing READ_CALENDAR permission: ${e.message}")
         }
 
-        return JSONObject().put("events", jsonArray).toString()
+        return null // No events found
     }
 }

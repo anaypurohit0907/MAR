@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="kite_blue">#3485FF</color>
+    <color name="kite_background">#F5F5F5</color>
+    <color name="kite_surface_white">#FFFFFF</color>
+    <color name="kite_text_primary">#444444</color>
+    <color name="kite_text_secondary">#888888</color>
+    <color name="kite_green">#4CAF50</color>
+    <color name="kite_red">#DF514C</color>
+    <color name="kite_orange">#FF9800</color>
+    <color name="kite_border">#E0E0E0</color>
+</resources>
