@@ -21,9 +21,12 @@ jobs:
     - name: Cargo Test (DAG Logic)
       run: cd mar-runtime/native && cargo test
 
+    - name: Cargo Build (staticlib, host target)
+      run: cd mar-runtime/native && cargo build --release
+
     - name: Build C++ with CMake (Mock NDK setup)
       run: |
         cd mar-runtime/native
         mkdir -p build && cd build
-        cmake ..
+        cmake .. -DMAR_BUILD_RUST=OFF
         make

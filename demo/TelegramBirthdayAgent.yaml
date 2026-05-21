@@ -5,7 +5,7 @@ agent:
   
 hardware_requirements:
   min_ram_mb: 1024
-  model: "qwen3.5-0.8b-q4f16"
+  model: "qwen2.5-0.5b"
 
 triggers:
   - type: alarm_manager

@@ -1,11 +1,11 @@
 # Mobile Agent Runtime (MAR) 📱🧠
 
-**The De-Facto Standard for On-Device Agentic AI** (Zero Cloud, Zero Root)
+**A YAML-driven agent runtime for Android** (Zero Cloud, Zero Root)
 
 MAR is a production-grade universal middleware bridging native Android capabilities with on-device Large Language Models. It empowers mobile devices with self-contained, offline Agent capabilities.
 
 ## 🚀 The Mission
-To achieve OSS adoption as the **"Docker for On-Device AI"**, empowering developers to ship small, fast, highly intelligent offline agents utilizing compressed SLMs (Small Language Models) like `Qwen2.5-0.5B`.
+Portable YAML workflows that call Android APIs (flashlight, timers, SMS, contacts, accessibility, web fetch) — all driven by on-device LLM inference via llama.cpp.
 
 ### Key Features
 *   **100% Offline AI Engines**: Uses native C++ (`llama.cpp`) to run GGUF models directly on device. No API limits, no network latency, complete data privacy.
@@ -14,7 +14,7 @@ To achieve OSS adoption as the **"Docker for On-Device AI"**, empowering develop
     *   **Test-Time Compute / Early Stopping**: Drastically speeds up execution by terminating inference the exact millisecond the required JSON bracket ends.
     *   **Vector-First Routing Bypass**: Captures known intents (e.g., "turn on flashlight") bridging direct Action execution in 1ms without utilizing LLM tokens.
     *   **Dynamic Prompt Optimization**: Prefix-constrained generation stripped of conversational bloat ensures lightning-fast evaluation (TPS).
-*   **Decoupled Architecture**: Strictly isolates JNI Inference (`hello_mar.cpp`), Routing & Sandbox (`MarAgentWorker`), Prompting (`PromptBuilder`), and OS Intents (`ActionExecutor`).
+*   **Decoupled Architecture**: Strictly isolates JNI Inference (`llm_bridge.cpp`), Routing & Sandbox (`MarAgentWorker`), Prompting (`PromptBuilder`), and OS Intents (`ActionExecutor`).
 
 ## 📦 Quick Start
 1.  Clone the repository and open in Android Studio.

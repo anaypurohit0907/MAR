@@ -23,9 +23,14 @@ object MarBridge {
     external fun loadModel(modelPath: String): Boolean
 
     /**
-     * Test primitive for the native inference loop.
+     * Executes real SLM inference natively using GGML Vulkan delegates.
      * @param prompt The incoming serialized EAP Observation or prompt.
      * @return The serialized next ToolCall or EAP Message.
      */
-    external fun runInferenceTest(prompt: String): String
+    external fun runInference(prompt: String): String
+
+    /**
+     * Executes the Workflow DAG state machine natively in Rust.
+     */
+    external fun runRustWorkflow(taskId: String, maxSteps: Int): Int
 }

@@ -1,0 +1,19 @@
+agent:
+  name: "NotifyReply"
+  version: "1.0.0"
+  description: "When any notification contains 'trigger' in text, shows a reply notification."
+
+triggers:
+  - type: notification
+    notification:
+      text_match: ".*trigger.*"
+    on_trigger: "step_1"
+
+workflow:
+  step_1:
+    action: "notify"
+    params:
+      title: "Auto-reply: {trigger.package}"
+      message: "Matched: {trigger.text}"
+      component: "Trigger Demo"
+    on_success: "exit"

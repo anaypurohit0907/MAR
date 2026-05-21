@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.MAR" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/kite_blue</item>
+        <item name="colorPrimaryVariant">@color/kite_blue_dark</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondary">@color/kite_orange</item>
+        <item name="colorAccent">@color/kite_orange</item>
+        <item name="android:colorBackground">#1A1A2E</item>
+        <item name="colorSurface">#16213E</item>
+        <item name="colorOnSurface">#E0E0E0</item>
+        <item name="android:windowBackground">#1A1A2E</item>
+        <item name="android:textColorPrimary">#E0E0E0</item>
+        <item name="android:textColorSecondary">#9E9E9E</item>
+        <item name="android:statusBarColor">#1A1A2E</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="colorSurfaceVariant">#1E2A4A</item>
+    </style>
+</resources>

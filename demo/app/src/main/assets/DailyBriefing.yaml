@@ -1,0 +1,30 @@
+agent:
+  name: "DailyBriefing"
+  version: "1.0.0"
+  description: "Reads today's calendar + notifications, shows briefing as notification."
+
+workflow:
+  step_1:
+    action: "content_query"
+    params:
+      uri: "content://com.android.calendar/events"
+      projection: ["_id", "title", "dtstart", "dtend"]
+      selection: "dtstart >= ? AND dtstart <= ?"
+      selection_args: ["{today_start}", "{today_end}"]
+    on_success: "step_2"
+    on_empty: "step_2"
+
+  step_2:
+    action: "read_notifications"
+    params:
+      count: 5
+      max_text_length: 120
+    on_success: "step_3"
+
+  step_3:
+    action: "notify"
+    params:
+      title: "Daily Briefing — {today}"
+      message: "Calendar: {step_1.output.count} events today\nNotifications: {step_2.output.count} recent"
+      component: "Daily Briefing"
+    on_success: "exit"

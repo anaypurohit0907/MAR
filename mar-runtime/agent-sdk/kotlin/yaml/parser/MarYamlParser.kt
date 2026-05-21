@@ -44,10 +44,19 @@ class MarYamlParser {
     private fun parseTriggers(list: List<Map<String, Any>>?): List<TriggerEntry> {
         if (list == null) return emptyList()
         return list.map {
+            val notificationMap = it["notification"] as? Map<String, Any>
             TriggerEntry(
                 type = it["type"]?.toString() ?: "",
                 schedule = it["schedule"]?.toString(),
-                event = it["event"]?.toString()
+                event = it["event"]?.toString(),
+                notification = if (notificationMap != null) {
+                    NotificationTrigger(
+                        packageName = notificationMap["package"]?.toString(),
+                        textMatch = notificationMap["text_match"]?.toString(),
+                        category = notificationMap["category"]?.toString(),
+                        onTrigger = it["on_trigger"]?.toString()
+                    )
+                } else null
             )
         }
     }

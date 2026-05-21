@@ -62,7 +62,7 @@ class MarWorkScheduler(private val context: Context) {
 
         workManager.enqueueUniqueWork(
             "unique_agent_$agentId",
-            ExistingWorkPolicy.REPLACE,
+            ExistingWorkPolicy.KEEP,
             workRequest
         )
     }
@@ -72,5 +72,27 @@ class MarWorkScheduler(private val context: Context) {
      */
     fun cancelAgent(agentId: String) {
         workManager.cancelAllWorkByTag("mar_agent_$agentId")
+    }
+
+    /**
+     * Schedule periodic trigger re-registration to pick up new YAML files.
+     */
+    fun scheduleTriggerSync() {
+        val constraints = Constraints.Builder()
+            .setRequiresBatteryNotLow(true)
+            .build()
+
+        val workRequest = PeriodicWorkRequestBuilder<TriggerSyncWorker>(
+            6, TimeUnit.HOURS
+        )
+            .setConstraints(constraints)
+            .addTag("mar_trigger_sync")
+            .build()
+
+        workManager.enqueueUniquePeriodicWork(
+            "mar_trigger_sync",
+            ExistingPeriodicWorkPolicy.KEEP,
+            workRequest
+        )
     }
 }

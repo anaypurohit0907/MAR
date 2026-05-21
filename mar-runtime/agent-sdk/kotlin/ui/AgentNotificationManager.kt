@@ -21,6 +21,10 @@ object AgentNotificationManager {
      * Drops the generic status bar notification in favor of direct active state UI mapping.
      */
     fun showAgentProgressNotification(context: Context, agentId: String, statusText: String) {
+        // Persist the status so UI can recover it after app restart
+        val prefs = context.getSharedPreferences("agent_status_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putString("status_$agentId", statusText).apply()
+
         val intent = Intent("com.mar.agent.PROGRESS").apply {
             putExtra("agentId", agentId)
             putExtra("status", statusText)
@@ -30,6 +34,9 @@ object AgentNotificationManager {
     }
 
     fun clearAgentNotification(context: Context, agentId: String) {
+        val prefs = context.getSharedPreferences("agent_status_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putString("status_$agentId", "Completed").apply()
+
         val intent = Intent("com.mar.agent.COMPLETE").apply {
             putExtra("agentId", agentId)
             setPackage(context.packageName)
@@ -81,8 +88,16 @@ object AgentNotificationManager {
     /**
      * General-purpose delegator: Captures UI-blocking intents (like sending emails or Telegram)
      * and wraps them in a polite, high-priority notification for the user to approve at their leisure.
+     * @param messageBody Optional extended text shown in the expanded notification so the user can
+     *   review the content (e.g. drafted message) before tapping to open the app.
      */
-    fun showActionRequiredNotification(context: Context, intent: Intent, component: String, description: String) {
+    fun showActionRequiredNotification(
+        context: Context,
+        intent: Intent,
+        component: String,
+        description: String,
+        messageBody: String? = null
+    ) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -103,15 +118,32 @@ object AgentNotificationManager {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val expandedText = if (messageBody != null) "$description\n\n---\n$messageBody" else description
+
         val builder = NotificationCompat.Builder(context, ACTION_CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_btn_speak_now) // Generic action icon
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle("Agent Task Ready: $component")
             .setContentText(description)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(description))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(expandedText))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
 
         notificationManager.notify(Random.nextInt(), builder.build())
+    }
+
+    fun showExecutionFailedNotification(context: Context, agentName: String) {
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(CHANNEL_ID, "Agent", NotificationManager.IMPORTANCE_LOW)
+            notificationManager.createNotificationChannel(channel)
+        }
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle("Agent Failed: $agentName")
+            .setContentText("Check execution log for details.")
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+        notificationManager.notify(agentName.hashCode(), builder.build())
     }
 }

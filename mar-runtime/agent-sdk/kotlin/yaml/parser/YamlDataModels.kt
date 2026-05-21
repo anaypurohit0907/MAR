@@ -19,10 +19,18 @@ data class HardwareRequirements(
     val model: String = ""
 )
 
+data class NotificationTrigger(
+    val packageName: String? = null,
+    val textMatch: String? = null,
+    val category: String? = null,
+    val onTrigger: String? = null
+)
+
 data class TriggerEntry(
     val type: String = "",
     val schedule: String? = null,
-    val event: String? = null
+    val event: String? = null,
+    val notification: NotificationTrigger? = null
 )
 
 data class ToolEntry(

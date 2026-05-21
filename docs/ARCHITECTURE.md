@@ -7,7 +7,7 @@ The MAR stack is purposefully divided into three deeply optimized, rigid layers 
 **Engine:** `llama.cpp`
 
 The bedrock tensor computation module. Offloads memory-heavy SLM operations (like Qwen-0.5B) correctly into physical NPU or ARM CPU structures without dragging down Android's ART garbage collector.
-*   **JNI Bridge (`hello_mar.cpp`)**: Allocates `llama_context`, loads the `.gguf` weight format natively into memory, and handles prompt tokenization directly in C++.
+*   **JNI Bridge (`llm_bridge.cpp`)**: Allocates `llama_context`, loads the `.gguf` weight format natively into memory, and handles prompt tokenization directly in C++.
 *   **Test-Time Compute Engine**: Employs structural early stopping. We constantly evaluate the output string buffers during token-loop generation; the precise millisecond the model completes a JSON instruction bracket (`]`), the generator cleanly breaks. Saves 90% of trailing token hallucinations.
 *   **Safety**: Adheres deeply to Android app-sandbox limits while pushing raw bare-metal speeds. No Root or Magisk modules required.
 

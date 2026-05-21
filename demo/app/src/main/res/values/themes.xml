@@ -1,14 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.MAR" parent="Theme.MaterialComponents.Light.NoActionBar">
+    <style name="Theme.MAR" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">@color/kite_blue</item>
-        <item name="colorPrimaryDark">@color/kite_blue</item>
+        <item name="colorPrimaryVariant">@color/kite_blue_dark</item>
+        <item name="colorOnPrimary">@color/kite_surface</item>
+        <item name="colorSecondary">@color/kite_orange</item>
         <item name="colorAccent">@color/kite_orange</item>
+        <item name="android:colorBackground">@color/kite_background</item>
+        <item name="colorSurface">@color/kite_surface</item>
+        <item name="colorOnSurface">@color/kite_on_surface</item>
         <item name="android:windowBackground">@color/kite_background</item>
         <item name="android:textColorPrimary">@color/kite_text_primary</item>
         <item name="android:textColorSecondary">@color/kite_text_secondary</item>
-        <!-- Support modern API windows -->
-        <item name="android:statusBarColor">@color/kite_surface_white</item>
+        <item name="android:statusBarColor">@color/kite_surface</item>
         <item name="android:windowLightStatusBar">true</item>
     </style>
 </resources>

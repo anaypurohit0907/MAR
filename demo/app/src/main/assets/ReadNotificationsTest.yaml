@@ -1,0 +1,13 @@
+agent:
+  name: "ReadNotificationsTest"
+  version: "1.0.0"
+  description: "Reads recent notifications and logs them."
+
+workflow:
+  step_1:
+    action: "read_notifications"
+    params:
+      count: 10
+      max_text_length: 200
+    on_success: "exit"
+    on_failure: "exit"

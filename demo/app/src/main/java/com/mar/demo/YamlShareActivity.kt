@@ -1,30 +1,59 @@
 package com.mar.demo
 
-import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
-import android.net.Uri
-import android.content.Intent
+import androidx.appcompat.app.AppCompatActivity
+import androidx.fragment.app.Fragment
+import com.mar.agent.sdk.db.WorkflowRepository
+import com.mar.demo.ui.fragments.YamlEditorFragment
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
-/**
- * Intercepts intent schemes (e.g. mar-agent://install or matching .yaml files) 
- * to load new workflows dynamically from the community directly into the database.
- */
-class YamlShareActivity : Activity() {
+class YamlShareActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val intent = intent
-        val action = intent.action
-        val type = intent.type
-        val data: Uri? = intent.data
+        val action = intent?.action
 
         if (Intent.ACTION_VIEW == action) {
-            handleSharedYaml(data, type)
+            handleSharedYaml(intent?.data, intent?.type)
         } else {
-            finish()
+            showEditor()
         }
+    }
+
+    private fun showEditor() {
+        val agentId = intent?.getStringExtra("agent_id")
+        if (agentId != null) {
+            CoroutineScope(Dispatchers.IO).launch {
+                val repo = WorkflowRepository(this@YamlShareActivity)
+                val wf = repo.getById(agentId)
+                val yaml = wf?.yaml ?: ""
+                runOnUiThread {
+                    openEditorWithYaml(agentId, yaml)
+                }
+            }
+        } else {
+            openEditorWithYaml("new_workflow", null)
+        }
+    }
+
+    private fun openEditorWithYaml(fileName: String, yamlContent: String?) {
+        val fragment = YamlEditorFragment()
+        val args = Bundle()
+        if (yamlContent != null) {
+            args.putString("DEFAULT_YAML", yamlContent)
+        }
+        args.putString("FILE_NAME", fileName.replace(" ", "_") + ".yaml")
+        fragment.arguments = args
+
+        supportFragmentManager.beginTransaction()
+            .replace(android.R.id.content, fragment)
+            .commit()
     }
 
     private fun handleSharedYaml(uri: Uri?, mimeType: String?) {
@@ -34,12 +63,10 @@ class YamlShareActivity : Activity() {
             return
         }
 
-        // Simulating the ingestion of the YAML file / scheme intent
         val agentId = "Imported_${System.currentTimeMillis()}"
-        
+
         Toast.makeText(this, "Agent configuration parsed & installed successfully.", Toast.LENGTH_LONG).show()
-        
-        // Return to main app
+
         finish()
     }
 }

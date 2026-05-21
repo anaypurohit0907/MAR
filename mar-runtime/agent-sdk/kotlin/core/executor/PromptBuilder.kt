@@ -13,12 +13,17 @@ object PromptBuilder {
     fun buildActionPrompt(userIntent: String): String {
         return """
             <|im_start|>system
-            Output only JSON.
+            Output only JSON array of action objects.
+            Available actions: set_timer, hardware_flashlight, open_url, CalendarQuery, ObserveScreen, launch_app.
             <|im_end|>
             <|im_start|>user
-            timer 10m Laundry<|im_end|>
+            timer 10m laundry<|im_end|>
             <|im_start|>assistant
-            [{"action":"set_timer","seconds":600,"message":"Laundry"}]<|im_end|>
+            [{"action":"set_timer","seconds":600,"message":"laundry"}]<|im_end|>
+            <|im_start|>user
+            turn on flashlight<|im_end|>
+            <|im_start|>assistant
+            [{"action":"hardware_flashlight","state":"on"}]<|im_end|>
             <|im_start|>user
             $userIntent<|im_end|>
             <|im_start|>assistant
@@ -32,7 +37,7 @@ object PromptBuilder {
     fun buildSystemPrompt(userQuery: String, toolsJson: String = "[]"): String {
          return """
             <|im_start|>system
-            You are a helpful, brief AI assistant. Make no conversational filler.
+            Be concise. Answer directly.
             <|im_end|>
             <|im_start|>user
             $userQuery<|im_end|>

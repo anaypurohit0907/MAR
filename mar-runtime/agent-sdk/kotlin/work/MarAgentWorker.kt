@@ -12,6 +12,7 @@ import android.app.NotificationManager
 import android.app.NotificationChannel
 import android.content.Intent
 import android.hardware.camera2.CameraManager
+import android.util.Log
 import android.net.Uri
 import android.os.Build
 import android.provider.AlarmClock
@@ -39,29 +40,27 @@ class MarAgentWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val agentId = inputData.getString(KEY_AGENT_ID) ?: return@withContext Result.failure()
-        
-        // 1. Elevate to Foreground Service to prevent OS killing long LLM inferences
-        // OS Doze mode dictates any API > 31 will suspend heavy CPU tasks unconditionally 
-        // after 10m unless strictly marked as Foreground user-visible. Our agents need
-        // constant CPU access to inference Qwen-0.8B safely.
-        setForeground(createForegroundInfo(agentId))
+
+        // Always show foreground notification so user can cancel
+        try { setForeground(createForegroundInfo(agentId)) } catch (e: Exception) { Log.w("MAR_Worker", "setForeground failed: ${e.message}") }
+
+        val yamlWorkflow = inputData.getString("yaml_workflow")
+
+        // Fast path: YAML-driven workflows
+        if (!yamlWorkflow.isNullOrBlank()) {
+            Log.i("MAR_Worker", "Yaml workflow detected! Starting Phase-3 Configured Agent execution.")
+            val parser = MarYamlParser()
+            val config = parser.parse(yamlWorkflow.byteInputStream())
+            val actionExecutor = ActionExecutor(context)
+            
+            val modelPath = MultiAgentRuntimeManager.findLocalModelPath(context, config.hardwareRequirements.model.ifBlank { null })
+            val runner = WorkflowRunner(context, actionExecutor)
+            runner.executeWorkflow(config, agentId, modelPath)
+            
+            return@withContext Result.success(workDataOf("native_logs" to "YAML workflow finished."))
+        }
 
         try {
-            val yamlWorkflow = inputData.getString("yaml_workflow")
-
-            if (!yamlWorkflow.isNullOrBlank()) {
-                println("MAR Router: Yaml workflow detected! Starting Phase-3 Configured Agent execution.")
-                val parser = MarYamlParser()
-                val config = parser.parse(yamlWorkflow.byteInputStream())
-                val actionExecutor = ActionExecutor(context)
-                
-                val runner = WorkflowRunner(context, actionExecutor)
-                // Pass agent ID to populate UI progress bounds
-                runner.executeWorkflow(config, agentId)
-                
-                return@withContext Result.success(workDataOf("native_logs" to "YAML workflow finished."))
-            }
-
             // User Intent that arrived from UI/Trigger
             val userIntent = inputData.getString("user_intent") ?: "set a timer for 10 minutes"
 
@@ -75,7 +74,7 @@ class MarAgentWorker(
             // Loop inference execution for Auto-Retries
             while (response.isBlank() && attempt < maxAttempts) {
                 if (attempt > 0) {
-                     println("MAR Router: Retrying LLM inference... Attempt ${attempt + 1}")
+                     Log.i("MAR_Worker", "Retrying LLM inference... Attempt ${attempt + 1}")
                      AgentNotificationManager.showAgentProgressNotification(context, agentId, "Retrying LLM Reasoning (Attempt ${attempt + 1}/$maxAttempts)...")
                 } else {
                      AgentNotificationManager.showAgentProgressNotification(context, agentId, "Starting LLM Inference...")
@@ -94,9 +93,9 @@ class MarAgentWorker(
             
             // 5. Hard Fallback to "Static Inference" ONLY if LLM explicitly crashed out entirely after all retries
             if (response.isBlank()) {
-                println("MAR Router: LLM collapsed entirely after $maxAttempts attempts.")
+                Log.w("MAR_Worker", "LLM collapsed entirely after $maxAttempts attempts.")
                 if (isVectorMatchFallback) {
-                    println("MAR Router: Exact vector match fallback used as LAST RESORT.")
+                    Log.w("MAR_Worker", "Exact vector match fallback used as LAST RESORT.")
                     AgentNotificationManager.showAgentProgressNotification(context, agentId, "Falling back to static vector match...")
                     response = """[{"action":"hardware_flashlight","state":"on"}]"""
                 } else {
@@ -106,7 +105,7 @@ class MarAgentWorker(
             }
 
             // Log for developer tracing
-            println("MAR Worker [$agentId] final response: $response")
+            Log.i("MAR_Worker", "[$agentId] final response: $response")
 
             // PARSE AND EXECUTE ACTIONS
             AgentNotificationManager.showAgentProgressNotification(context, agentId, "Executing identified Actions...")
@@ -132,7 +131,11 @@ class MarAgentWorker(
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(channelId, title, NotificationManager.IMPORTANCE_LOW)
-            notificationManager.createNotificationChannel(channel)
+            try {
+                notificationManager.createNotificationChannel(channel)
+            } catch (e: SecurityException) {
+                // POST_NOTIFICATIONS not granted on API 33+, skip channel creation
+            }
         }
 
         val intent = WorkManager.getInstance(context).createCancelPendingIntent(id)

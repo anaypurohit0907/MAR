@@ -1,0 +1,14 @@
+agent:
+  name: "ComposeSelfTest"
+  version: "1.0.0"
+  description: "Validates AccessibilityService by composing text into Settings search bar."
+
+workflow:
+  step_1:
+    action: "ui_compose"
+    params:
+      target_app: "com.android.settings"
+      contact: "self-test"
+      message: "MAR AccessibilityService works!"
+    on_success: "exit"
+    on_failure: "exit"

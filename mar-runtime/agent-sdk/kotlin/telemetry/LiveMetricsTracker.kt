@@ -58,6 +58,7 @@ class LiveMetricsTracker(private val context: Context) {
         }
         val level: Int = batteryStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
         val scale: Int = batteryStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+        if (level < 0 || scale <= 0) return 0f
         return level * 100 / scale.toFloat()
     }
 

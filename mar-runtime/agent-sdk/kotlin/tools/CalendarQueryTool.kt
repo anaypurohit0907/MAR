@@ -1,30 +1,13 @@
 package com.mar.agent.sdk.tools
 
-import android.content.ContentResolver
 import android.content.Context
-import android.database.Cursor
-import android.net.Uri
 import android.provider.CalendarContract
+import org.json.JSONObject
 import java.util.Calendar
 
-/**
- * Tool to safely query Android Calendar using ContentResolver.
- * Requires android.permission.READ_CALENDAR.
- */
 class CalendarQueryTool(private val context: Context) {
 
     fun queryEvents(query: String?, eventType: String?): Map<String, Any>? {
-        val resolver: ContentResolver = context.contentResolver
-        val uri: Uri = CalendarContract.Events.CONTENT_URI
-
-        val projection = arrayOf(
-            CalendarContract.Events._ID,
-            CalendarContract.Events.TITLE,
-            CalendarContract.Events.DTSTART,
-            CalendarContract.Events.DTEND
-        )
-
-        // Set time bounds for querying "today"
         val startOfDay = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
@@ -35,34 +18,46 @@ class CalendarQueryTool(private val context: Context) {
             set(Calendar.MINUTE, 59)
             set(Calendar.SECOND, 59)
         }
+        val beginMs = startOfDay.timeInMillis
+        val endMs = endOfDay.timeInMillis
 
-        val selection = "${CalendarContract.Events.DTSTART} >= ? AND ${CalendarContract.Events.DTSTART} <= ?"
-        val selectionArgs = arrayOf(startOfDay.timeInMillis.toString(), endOfDay.timeInMillis.toString())
+        val instancesUri = CalendarContract.Instances.CONTENT_URI.buildUpon()
+            .appendPath(beginMs.toString())
+            .appendPath(endMs.toString())
+            .build()
 
-        try {
-            val cursor: Cursor? = resolver.query(uri, projection, selection, selectionArgs, null)
-            cursor?.use {
-                val titleIndex = it.getColumnIndex(CalendarContract.Events.TITLE)
+        val projection = listOf(
+            CalendarContract.Instances._ID,
+            CalendarContract.Instances.TITLE,
+            CalendarContract.Instances.BEGIN,
+            CalendarContract.Instances.END
+        )
 
-                while (it.moveToNext()) {
-                    val title = it.getString(titleIndex)
-                    
-                    // Simple NLP check: does it match "Birthday"?
-                    if (eventType?.equals("birthday", ignoreCase = true) == true) {
-                        if (title.contains("birthday", ignoreCase = true)) {
-                            // Extract name (e.g. "Alice's Birthday" -> "Alice")
-                            val name = title.replace("(?i)'s birthday".toRegex(), "").trim()
-                            return mapOf("name" to name) // Matches {step_1.output.name}
-                        }
-                    } else if (query != null && title.contains(query, ignoreCase = true)) {
-                        return mapOf("title" to title)
-                    }
-                }
-            }
-        } catch (e: SecurityException) {
-            return mapOf("error" to "Missing READ_CALENDAR permission: ${e.message}")
+        val tool = ContentQueryTool(context)
+        val rawResult = tool.query(
+            uriString = instancesUri.toString(),
+            projection = projection,
+            selection = null,
+            selectionArgs = null
+        )
+
+        val json = JSONObject(rawResult)
+        val count = json.optInt("count", 0)
+        if (count == 0) return null
+
+        val row = json.optJSONArray("rows")?.optJSONObject(0) ?: return null
+        val title = row.optString(CalendarContract.Instances.TITLE, "")
+
+        if (eventType?.equals("birthday", ignoreCase = true) == true) {
+            val name = title.replace("(?i)(?:'s)?\\s*birthday".toRegex(), "").trim()
+            return mapOf("name" to name.ifEmpty { title })
+        } else if (query != null && title.contains(query, ignoreCase = true)) {
+            return mapOf("title" to title)
         }
+        return null
+    }
 
-        return null // No events found
+    companion object {
+        private const val TAG = "MAR_CalendarQuery"
     }
 }
