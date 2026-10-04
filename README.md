@@ -16,6 +16,36 @@ Portable YAML workflows that call Android APIs (flashlight, timers, SMS, contact
     *   **Dynamic Prompt Optimization**: Prefix-constrained generation stripped of conversational bloat ensures lightning-fast evaluation (TPS).
 *   **Decoupled Architecture**: Strictly isolates JNI Inference (`llm_bridge.cpp`), Routing & Sandbox (`MarAgentWorker`), Prompting (`PromptBuilder`), and OS Intents (`ActionExecutor`).
 
+## 🛣️ Roadmap: The Fast Path
+
+MAR v0.1.0 runs fully offline on a `Qwen2.5-0.5B` GGUF model (~10s per LLM inference), with the rules/TFLite tier handling known commands in under 5ms. The next phase is a MAR-specialized inference stack that brings the rest down to milliseconds-to-low-seconds — still 100% on-device, zero-cloud.
+
+### Two specialized models, not one
+
+*   **Decision model (non-autoregressive)**: A tiny System One–style model that returns typed choices with calibrated probabilities in a single forward pass. It never generates text — it selects tools, gates arguments, and matches triggers. Target: ~10-30ms per decision, shipped as TFLite/ONNX.
+*   **Tiny generator (autoregressive)**: A fine-tuned / distilled 135M-0.5B model trained on MAR's exact ChatML + action JSON contract. Used only when language actually needs to be written (message drafting, open-ended slots, hard fallbacks). Quantized to GGUF and constrained by a GBNF JSON grammar so output is always valid.
+
+### Execution tiers (target)
+
+| Tier | Handles | Target latency |
+| :--- | :--- | ---: |
+| Rules | Flashlight, timers, known intents | < 1 ms |
+| Decision model | Tool selection, argument gating, triggers | ~10-30 ms |
+| Tiny generator + grammar | Drafting, open slots, complex actions | ~1-3 s |
+| Current 0.5B | Hard / creative fallback | ~10 s |
+
+Most commands should never reach autoregressive decoding at all.
+
+### Build order
+
+1.  **Grammar-constrained decoding (GBNF)** — no training required; guarantees valid JSON action output.
+2.  **Prompt shrink** — fine-tuning removes few-shot examples from the prompt, cutting prefill cost.
+3.  **Decision model** — distill teacher labels into a small typed-decision head.
+4.  **Tiny generator** — fine-tune/distill on synthetic MAR trajectories, quantize, benchmark on device.
+5.  **Eval harness** — held-out utterances → expected actions, so regressions are measurable.
+
+All models remain fully local and offline; nothing in this plan introduces a cloud dependency.
+
 ## 📦 Quick Start
 1.  Clone the repository and open in Android Studio.
 2.  The native inference engine (`llama.cpp`) is securely submoduled. Build native libraries natively via Gradle edge CMake targets.

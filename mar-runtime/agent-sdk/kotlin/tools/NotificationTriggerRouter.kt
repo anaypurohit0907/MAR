@@ -32,14 +32,32 @@ object NotificationTriggerRouter {
         val now = System.currentTimeMillis()
         for (reg in registrations) {
             val last = lastTriggerTime[reg.agentId] ?: 0L
-            if (now - last < 10_000) continue // 10s cooldown per agent
             val t = reg.trigger
+            val cooldown = (t.cooldownSeconds ?: 10L) * 1000L
+            if (now - last < cooldown) continue 
             if (t.packageName != null && t.packageName != event.packageName) continue
             if (t.textMatch != null) {
                 val regex = try { t.textMatch.toRegex() } catch (e: Exception) { null }
                 if (regex == null || !regex.containsMatchIn(event.text ?: "")) continue
             }
             if (t.category != null && t.category != event.category) continue
+
+            // Time Window check
+            if (t.timeWindowStart != null && t.timeWindowEnd != null) {
+                try {
+                    val nowTime = java.time.LocalTime.now()
+                    val start = java.time.LocalTime.parse(t.timeWindowStart)
+                    val end = java.time.LocalTime.parse(t.timeWindowEnd)
+                    if (start.isBefore(end)) {
+                        if (nowTime.isBefore(start) || nowTime.isAfter(end)) continue
+                    } else {
+                        // Spans midnight (e.g. 22:00 to 06:00)
+                        if (nowTime.isAfter(end) && nowTime.isBefore(start)) continue
+                    }
+                } catch (e: Exception) {
+                    Log.w("MAR_TriggerRouter", "Invalid time window config: ${e.message}")
+                }
+            }
 
             var yaml = reg.yaml
             yaml = yaml.replace("{trigger.package}", event.packageName)

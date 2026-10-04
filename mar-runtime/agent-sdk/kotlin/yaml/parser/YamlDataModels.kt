@@ -23,7 +23,10 @@ data class NotificationTrigger(
     val packageName: String? = null,
     val textMatch: String? = null,
     val category: String? = null,
-    val onTrigger: String? = null
+    val onTrigger: String? = null,
+    val cooldownSeconds: Long? = null,
+    val timeWindowStart: String? = null,
+    val timeWindowEnd: String? = null
 )
 
 data class TriggerEntry(

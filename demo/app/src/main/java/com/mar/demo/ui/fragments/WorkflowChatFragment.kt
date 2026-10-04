@@ -96,6 +96,26 @@ class WorkflowChatFragment : Fragment() {
             })
         }
 
+        // Persistent banner shown when no API key is configured
+        val apiKeyMissing = prefs.getString("api_key", null).isNullOrBlank()
+        val bannerView = TextView(ctx).apply {
+            text = "\u2699\uFE0F No API key set. Go to Settings \u2192 API Key to enable workflow generation."
+            setBackgroundColor(0xFFF59E0B.toInt())
+            setTextColor(resources.getColor(android.R.color.white, null))
+            textSize = 13f
+            val sixteenDp = (16 * resources.displayMetrics.density).toInt()
+            setPadding(sixteenDp, sixteenDp, sixteenDp, sixteenDp)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 0, 0, 8) }
+            setOnClickListener {
+                Toast.makeText(requireContext(), "Go to Settings tab to add your API key", Toast.LENGTH_LONG).show()
+            }
+            visibility = if (apiKeyMissing) View.VISIBLE else View.GONE
+        }
+        outer.addView(bannerView)
+
         outer.addView(messagesContainer)
         outer.addView(inputField)
         outer.addView(buttons)

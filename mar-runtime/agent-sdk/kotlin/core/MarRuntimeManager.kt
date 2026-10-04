@@ -14,7 +14,7 @@ import java.io.File
 object MultiAgentRuntimeManager {
 
     private val inferenceMutex = Mutex()
-    private const val INFERENCE_TIMEOUT_MS = 60_000L
+    private const val INFERENCE_TIMEOUT_MS = 120_000L
     private val cpuThreads = (Runtime.getRuntime().availableProcessors().coerceIn(2, 8)).also {
         Log.i("MAR_RuntimeManager", "CPU cores detected: $it")
     }
@@ -62,7 +62,7 @@ object MultiAgentRuntimeManager {
         if (isModelLoaded && modelPath == loadedModelPath) return true
         return withContext(Dispatchers.IO) {
             if (!isEngineInitialized) {
-                isEngineInitialized = MarBridge.initialize(maxRamMb = 1024, threads = 4)
+                isEngineInitialized = MarBridge.initialize(maxRamMb = 1024, threads = cpuThreads)
                 if (!isEngineInitialized) return@withContext false
             }
             isModelLoaded = MarBridge.loadModel(modelPath)

@@ -94,11 +94,21 @@ fun WorkflowStepCard(
                     }
                 )
                 if (step.durationMs > 0) {
-                    Text(
-                        text = formatDuration(step.durationMs),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MarColors.TextSecondary
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (step.tps > 0) {
+                            Text(
+                                text = "%.1f t/s".format(step.tps),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MarColors.Blue,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                        }
+                        Text(
+                            text = formatDuration(step.durationMs),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MarColors.TextSecondary
+                        )
+                    }
                 }
             }
 

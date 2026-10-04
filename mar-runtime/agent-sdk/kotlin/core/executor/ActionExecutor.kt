@@ -54,11 +54,11 @@ class ActionExecutor(private val context: Context) {
                     result // null = no events found, WorkflowRunner routes to on_empty
                 }
                 "UITapper" -> {
-                    val app = item.optString("app")
-                    val contact = item.optString("target_contact")
-                    val msg = item.optString("input_text")
+                    val app = item.optString("app", "com.google.android.apps.messaging")
+                    val contact = item.optString("target_contact", "Unknown Contact")
+                    val msg = item.optString("input_text", "Hello!")
                     // sub_action comes from params.action in YAML, forwarded by WorkflowRunner
-                    val tapAction = item.optString("sub_action", item.optString("action", ""))
+                    val tapAction = item.optString("sub_action", item.optString("action", "send"))
                     Log.i("MAR_ActionExecutor", "UITapper $tapAction for $app")
 
                     if (tapAction == "send" || tapAction == "send_message") {
@@ -128,7 +128,7 @@ class ActionExecutor(private val context: Context) {
                     true
                 }
                 "set_timer" -> {
-                    val seconds = item.optInt("seconds", -1)
+                    val seconds = item.optInt("seconds", 300) // Default to 5 minutes
                     if (seconds <= 0) {
                         Log.w("MAR_ActionExecutor", "set_timer missing or invalid 'seconds'")
                         return@executeSingleAction false
@@ -184,8 +184,8 @@ class ActionExecutor(private val context: Context) {
                         )
                     }
                 }
-                "read_notifications" -> {
-                    val count = item.optInt("count", 5)
+                "read_notifications", "NotificationListener" -> {
+                    val count = item.optInt("count", 10) // Increased default for context
                     val packageFilter = item.optString("package_filter", null)?.takeIf { it.isNotBlank() }
                     if (!NotificationListenerManager.isConnected) {
                         Log.w("MAR_ActionExecutor", "NotificationListenerService not connected")
@@ -195,11 +195,10 @@ class ActionExecutor(private val context: Context) {
                             .filter { n -> packageFilter == null || n.packageName == packageFilter }
                             .let { filtered ->
                                 if (packageFilter != null) {
-                                    // Only keep the most recent per filtered package
                                     filtered.groupBy { it.packageName }.mapValues { it.value.last() }.values.toList()
                                 } else filtered
                             }
-                        val maxLen = item.optInt("max_text_length", 200)
+                        val maxLen = item.optInt("max_text_length", 300) // Increased max length
                         val notifsJson = JSONArray()
                         notifications.forEach { n ->
                             val nObj = JSONObject().apply {
@@ -221,7 +220,8 @@ class ActionExecutor(private val context: Context) {
                             "status" to "ok",
                             "count" to notifsJson.length(),
                             "notifications" to notifsJson.toString(),
-                            "texts" to joinedTexts
+                            "texts" to joinedTexts,
+                            "text" to joinedTexts // Add alias for workflow template matching
                         )
                     }
                 }

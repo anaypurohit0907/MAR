@@ -12,6 +12,7 @@ data class ExecutionStep(
     val action: String,
     val status: StepStatus = StepStatus.PENDING,
     val durationMs: Long = 0L,
+    val tps: Double = 0.0,
     val output: String? = null,
     val error: String? = null
 )
@@ -55,12 +56,12 @@ object ExecutionState {
         _current.value = exec.copy(steps = steps, currentStepIndex = stepIndex)
     }
 
-    fun completeStep(stepIndex: Int, durationMs: Long, output: String?) {
+    fun completeStep(stepIndex: Int, durationMs: Long, output: String?, tps: Double = 0.0) {
         val exec = _current.value ?: return
         val steps = exec.steps.toMutableList()
         if (stepIndex < steps.size) {
             steps[stepIndex] = steps[stepIndex].copy(
-                status = StepStatus.COMPLETED, durationMs = durationMs, output = output
+                status = StepStatus.COMPLETED, durationMs = durationMs, output = output, tps = tps
             )
         }
         _current.value = exec.copy(steps = steps, currentStepIndex = stepIndex + 1)

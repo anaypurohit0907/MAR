@@ -111,13 +111,16 @@ class WorkflowRunner(
                             Log.e(TAG, "Model file too small (${modelFile.length()} bytes) — likely corrupt")
                             AgentNotificationManager.showAgentProgressNotification(context, agentName, "Model file corrupt — skipping LLM step")
                         } else {
+                            val compressedPrompt = com.mar.agent.sdk.core.ContextCompressor
+                                .truncateToTokenBudget(hydratedPrompt, maxTokens = 800)
                             val chatMl = PromptBuilder.buildSystemPrompt(
-                                userQuery = hydratedPrompt,
+                                userQuery = compressedPrompt,
                                 toolsJson = "[]"
                             )
 
                             var response = ""
                             var attempts = 0
+                            var lastTps = 0.0
 
                             while (response.isBlank() && attempts < MAX_RETRIES) {
                                 if (attempts > 0) {
@@ -125,8 +128,17 @@ class WorkflowRunner(
                                     Log.w(TAG, "Retrying LLM inference... Attempt ${attempts + 1}")
                                 }
                                 try {
+                                    val infStart = System.currentTimeMillis()
                                     val result = MultiAgentRuntimeManager.executeInference(context, chatMl, modelPath)
-                                    if (result.isNotBlank() && !result.contains("\"error\":")) response = result
+                                    val infDuration = System.currentTimeMillis() - infStart
+                                    
+                                    if (result.isNotBlank() && !result.contains("\"error\":")) {
+                                        response = result
+                                        val tokenCount = response.length / 4 
+                                        if (infDuration > 0) {
+                                            lastTps = (tokenCount.toDouble() * 1000.0) / infDuration
+                                        }
+                                    }
                                     else Log.w(TAG, "LLM returned empty/error: ${result.take(200)}")
                                 } catch (e: TimeoutCancellationException) {
                                     Log.e(TAG, "LLM inference timed out: ${e.message}")
@@ -143,6 +155,7 @@ class WorkflowRunner(
                                 memoryContext["$currentStepKey.output.draft_text"] = response
                                 memoryContext["$currentStepKey.output.text"] = response
                                 success = true
+                                memoryContext["$currentStepKey.last_tps"] = lastTps.toString()
                             } else {
                                 AgentNotificationManager.showAgentProgressNotification(context, agentName, "Step $currentStepKey failed after $MAX_RETRIES attempts.")
                                 Log.e(TAG, "LLM inference failed completely for $currentStepKey.")
@@ -179,8 +192,12 @@ class WorkflowRunner(
                         }
 
                         if (result is Map<*, *>) {
+                            @Suppress("UNCHECKED_CAST")
+                            val compressed = com.mar.agent.sdk.core.ContextCompressor.compress(
+                                step.action, result as Map<String, Any?>
+                            )
                             val jsonObj = org.json.JSONObject()
-                            result.forEach { (k, v) ->
+                            compressed.forEach { (k, v) ->
                                 val key = k?.toString() ?: ""
                                 val value = v?.toString() ?: ""
                                 jsonObj.put(key, value)
@@ -206,8 +223,10 @@ class WorkflowRunner(
 
                 val stepDuration = System.currentTimeMillis() - stepStart
                 val stepOutput = memoryContext["$currentStepKey.output.json"] ?: memoryContext["$currentStepKey.output.text"]
+                val tps = memoryContext["$currentStepKey.last_tps"]?.toDoubleOrNull() ?: 0.0
+                
                 if (success) {
-                    ExecutionState.completeStep(stepIndex, stepDuration, stepOutput)
+                    ExecutionState.completeStep(stepIndex, stepDuration, stepOutput, tps)
                 } else {
                     hadError = true
                     ExecutionState.failStep(stepIndex, stepDuration, step.action)

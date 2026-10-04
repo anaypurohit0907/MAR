@@ -104,4 +104,11 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
     androidTestImplementation("androidx.room:room-testing:2.5.2")
+    
+    // QR Code Generation and Scanning
+    implementation("com.google.zxing:core:3.5.1")
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+    
+    // ML Kit
+    implementation("com.google.mlkit:entity-extraction:16.0.0-beta4")
 }

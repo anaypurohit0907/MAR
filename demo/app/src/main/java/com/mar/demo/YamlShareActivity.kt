@@ -5,7 +5,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.fragment.app.Fragment
 import com.mar.agent.sdk.db.WorkflowRepository
 import com.mar.demo.ui.fragments.YamlEditorFragment
 import kotlinx.coroutines.CoroutineScope
@@ -38,17 +37,19 @@ class YamlShareActivity : AppCompatActivity() {
                 }
             }
         } else {
-            openEditorWithYaml("new_workflow", null)
+            openEditorWithYaml(null, null)
         }
     }
 
-    private fun openEditorWithYaml(fileName: String, yamlContent: String?) {
+    private fun openEditorWithYaml(agentId: String?, yamlContent: String?) {
         val fragment = YamlEditorFragment()
         val args = Bundle()
+        if (agentId != null) {
+            args.putString("AGENT_ID", agentId)
+        }
         if (yamlContent != null) {
             args.putString("DEFAULT_YAML", yamlContent)
         }
-        args.putString("FILE_NAME", fileName.replace(" ", "_") + ".yaml")
         fragment.arguments = args
 
         supportFragmentManager.beginTransaction()
@@ -62,10 +63,49 @@ class YamlShareActivity : AppCompatActivity() {
             finish()
             return
         }
+        
+        try {
+            val yamlParam = uri.getQueryParameter("yaml")
+            if (yamlParam != null) {
+                // Decode from mar-agent://install?yaml=...
+                val bytes = android.util.Base64.decode(yamlParam, android.util.Base64.URL_SAFE)
+                val input = java.io.ByteArrayInputStream(bytes)
+                val decompressedBytes = java.util.zip.GZIPInputStream(input).readBytes()
+                val yamlText = String(decompressedBytes)
+                
+                // Validate YAML
+                val validation = com.mar.agent.sdk.yaml.parser.YamlValidator.validate(yamlText)
+                if (!validation.isValid) {
+                    val errors = validation.errors.joinToString("\n")
+                    runOnUiThread {
+                        android.app.AlertDialog.Builder(this@YamlShareActivity)
+                            .setTitle("Invalid Agent YAML")
+                            .setMessage("Cannot import this agent because it contains errors:\n\n$errors")
+                            .setPositiveButton("OK") { _, _ -> finish() }
+                            .show()
+                    }
+                    return
+                }
 
-        val agentId = "Imported_${System.currentTimeMillis()}"
-
-        Toast.makeText(this, "Agent configuration parsed & installed successfully.", Toast.LENGTH_LONG).show()
+                // Parse it to get the name
+                val config = com.mar.agent.sdk.yaml.parser.MarYamlParser().parse(yamlText.byteInputStream())
+                val agentName = config.agent.name.ifBlank { "Shared Agent" }
+                val agentDesc = config.agent.description.ifBlank { "Imported via QR/Link" }
+                
+                CoroutineScope(Dispatchers.IO).launch {
+                    val repo = WorkflowRepository(this@YamlShareActivity)
+                    repo.save(java.util.UUID.randomUUID().toString(), agentName, agentDesc, yamlText)
+                    runOnUiThread {
+                        Toast.makeText(this@YamlShareActivity, "Imported '$agentName' successfully!", Toast.LENGTH_LONG).show()
+                        finish()
+                    }
+                }
+                return
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(this, "Failed to import agent: ${e.message}", Toast.LENGTH_LONG).show()
+        }
 
         finish()
     }

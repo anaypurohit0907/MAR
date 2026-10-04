@@ -54,7 +54,10 @@ class MarYamlParser {
                         packageName = notificationMap["package"]?.toString(),
                         textMatch = notificationMap["text_match"]?.toString(),
                         category = notificationMap["category"]?.toString(),
-                        onTrigger = it["on_trigger"]?.toString()
+                        onTrigger = it["on_trigger"]?.toString(),
+                        cooldownSeconds = (notificationMap["cooldown_seconds"] as? Number)?.toLong(),
+                        timeWindowStart = notificationMap["time_window_start"]?.toString(),
+                        timeWindowEnd = notificationMap["time_window_end"]?.toString()
                     )
                 } else null
             )

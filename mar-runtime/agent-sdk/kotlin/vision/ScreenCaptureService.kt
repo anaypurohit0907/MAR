@@ -19,6 +19,7 @@ import android.os.IBinder
 import android.util.Log
 import android.widget.Toast
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
 import com.mar.demo.FileLogger
 
@@ -41,6 +42,8 @@ class ScreenCaptureService : Service() {
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
     private var projectionManager: MediaProjectionManager? = null
+    private var imageReaderThread: HandlerThread? = null
+    private var imageReaderHandler: Handler? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -136,6 +139,10 @@ class ScreenCaptureService : Service() {
 
             FileLogger.log("Display metrics: ${width}x${height} density=$density")
 
+            // Setup dedicated background thread for ImageReader callbacks to avoid ANR on main thread
+            imageReaderThread = HandlerThread("ImageReaderThread").also { it.start() }
+            imageReaderHandler = Handler(imageReaderThread!!.looper)
+
             // Setup ImageReader
             imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
             imageReader?.setOnImageAvailableListener({ reader ->
@@ -163,7 +170,7 @@ class ScreenCaptureService : Service() {
                 } catch (e: Exception) {
                     Log.e(TAG, "Error acquiring or parsing image frame: ${e.message}")
                 }
-            }, null)
+            }, imageReaderHandler)
 
             FileLogger.log("Creating virtual display")
             virtualDisplay = mediaProjection?.createVirtualDisplay(
@@ -216,6 +223,8 @@ class ScreenCaptureService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "Error cleanly destroying projection: ${e.message}")
         } finally {
+            imageReaderThread?.quitSafely()
+            imageReaderThread = null
             isRunning = false
             Log.i(TAG, "Screen capture service destroyed.")
         }

@@ -24,6 +24,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -50,6 +52,8 @@ fun LibraryScreen(
     onEdit: (String) -> Unit,
     onDelete: (String) -> Unit,
     onCreateNew: () -> Unit,
+    onShare: (String) -> Unit,
+    onScanQr: () -> Unit,
     onChangeModel: ((workflowId: String) -> Unit)? = null
 ) {
     LazyColumn(
@@ -67,16 +71,27 @@ fun LibraryScreen(
                     style = MaterialTheme.typography.headlineMedium,
                     color = MarColors.TextPrimary
                 )
-                Button(
-                    onClick = onCreateNew,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MarColors.Blue.copy(alpha = 0.2f)
-                    ),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Create", tint = MarColors.Blue)
-                    Spacer(Modifier.width(4.dp))
-                    Text("New", color = MarColors.Blue)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = onScanQr,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MarColors.Green.copy(alpha = 0.2f)
+                        ),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.Search, contentDescription = "Scan", tint = MarColors.Green)
+                    }
+                    Button(
+                        onClick = onCreateNew,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MarColors.Blue.copy(alpha = 0.2f)
+                        ),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Create", tint = MarColors.Blue)
+                        Spacer(Modifier.width(4.dp))
+                        Text("New", color = MarColors.Blue)
+                    }
                 }
             }
         }
@@ -99,6 +114,7 @@ fun LibraryScreen(
                 onRun = { onRun(item.id) },
                 onEdit = { onEdit(item.id) },
                 onDelete = { onDelete(item.id) },
+                onShare = { onShare(item.id) },
                 onChangeModel = onChangeModel?.let { { it(item.id) } }
             )
         }
@@ -111,6 +127,7 @@ private fun LibraryCard(
     onRun: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onShare: () -> Unit,
     onChangeModel: (() -> Unit)? = null
 ) {
     GlassCard {
@@ -171,6 +188,9 @@ private fun LibraryCard(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             IconButton(onClick = onDelete) {
                 Icon(Icons.Default.Delete, "Delete", tint = MarColors.Red.copy(alpha = 0.7f))
+            }
+            IconButton(onClick = onShare) {
+                Icon(Icons.Default.Share, "Share", tint = MarColors.Blue.copy(alpha = 0.8f))
             }
             IconButton(onClick = onEdit) {
                 Icon(Icons.Default.Edit, "Edit", tint = MarColors.TextSecondary)

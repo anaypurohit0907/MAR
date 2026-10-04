@@ -27,101 +27,103 @@ object ModelDownloader {
         return context.getExternalFilesDir("models") ?: context.filesDir
     }
 
-    private fun downloadWithRetry(url: URL, file: File, timeoutMs: Int = 30000, maxRetries: Int = 3): Long? {
-        var lastError: String? = null
-        for (attempt in 1..maxRetries) {
-            try {
-                if (file.exists()) file.delete()
-                val conn = url.openConnection() as HttpURLConnection
-                conn.connectTimeout = timeoutMs
-                conn.readTimeout = timeoutMs
-                conn.setRequestProperty("User-Agent", "MAR-Downloader/1.0")
-                conn.connect()
-                if (conn.responseCode != HttpURLConnection.HTTP_OK) {
-                    lastError = "HTTP ${conn.responseCode}"
-                    Log.w("MAR_Downloader", "Attempt $attempt/$maxRetries: $lastError")
-                    if (attempt < maxRetries) Thread.sleep(1000L * attempt)
-                    continue
-                }
-                val input = conn.inputStream
-                val output = file.outputStream()
-                val buf = ByteArray(8192)
-                var total = 0L
-                while (true) {
-                    val read = input.read(buf)
-                    if (read == -1) break
-                    output.write(buf, 0, read)
-                    total += read
-                }
-                output.close(); input.close()
-                if (file.exists() && file.length() > 0) return total
-            } catch (e: Exception) {
-                lastError = "${e::class.simpleName}: ${e.message}"
-                Log.w("MAR_Downloader", "Attempt $attempt/$maxRetries failed: $lastError")
-                if (attempt < maxRetries) Thread.sleep(1000L * attempt)
-            }
-        }
-        Log.e("MAR_Downloader", "All $maxRetries attempts failed: $lastError")
-        return null
-    }
-
     fun downloadModel(context: Context, cm: CuratedModel): Flow<DownloadState> = flow {
         val modelDir = getModelDir(context)
         modelDir.mkdirs()
         val file = File(modelDir, cm.hfFile)
-        if (file.exists() && file.length() > cm.expectedBytes * 9 / 10) {
+        
+        if (file.exists() && file.length() > 50_000_000) {
             emit(DownloadState.Success(file))
             return@flow
         }
-        val url = URL("https://huggingface.co/${cm.hfRepo}/resolve/main/${cm.hfFile}")
-        val totalLen = try {
-            val conn = url.openConnection() as HttpURLConnection
-            conn.connectTimeout = 10000
-            conn.readTimeout = 10000
-            conn.requestMethod = "HEAD"
-            conn.connect()
-            if (conn.responseCode == 200) conn.contentLength else cm.expectedBytes
-        } catch (e: Exception) { cm.expectedBytes }
-        val result = downloadWithRetry(url, file)
-        if (result != null) {
-            emit(DownloadState.Success(file))
-        } else {
+
+        var urlString = "https://huggingface.co/${cm.hfRepo}/resolve/main/${cm.hfFile}"
+        lastDebugLog = "Init: ${cm.label}"
+        
+        try {
             if (file.exists()) file.delete()
-            emit(DownloadState.Error("Download failed after retries"))
+            
+            var connection: HttpURLConnection
+            var responseCode: Int
+            var redirects = 0
+            val maxRedirects = 5
+
+            do {
+                val url = URL(urlString)
+                connection = url.openConnection() as HttpURLConnection
+                connection.connectTimeout = 30000
+                connection.readTimeout = 30000
+                connection.instanceFollowRedirects = true
+                connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Android; Mobile; rv:100.0) Gecko/100.0 Firefox/100.0")
+                
+                responseCode = connection.responseCode
+                lastDebugLog = "HTTP $responseCode"
+                
+                if (responseCode == HttpURLConnection.HTTP_MOVED_TEMP || 
+                    responseCode == HttpURLConnection.HTTP_MOVED_PERM ||
+                    responseCode == 301 || responseCode == 302 ||
+                    responseCode == 307 || responseCode == 308) {
+                    
+                    val newUrl = connection.getHeaderField("Location")
+                    if (newUrl != null) {
+                        urlString = newUrl
+                        redirects++
+                        lastDebugLog = "Redirect $redirects..."
+                    } else break
+                } else break
+            } while (redirects < maxRedirects)
+
+            if (responseCode != HttpURLConnection.HTTP_OK) {
+                lastDebugLog = "Error HTTP $responseCode"
+                emit(DownloadState.Error("HTTP $responseCode"))
+                return@flow
+            }
+
+            val totalBytes = connection.contentLength.toLong().let { if (it <= 0) cm.expectedBytes else it }
+            val input = connection.inputStream
+            val output = file.outputStream()
+            val buf = ByteArray(1024 * 32)
+            var downloaded = 0L
+            var lastUpdate = 0L
+
+            while (true) {
+                val read = input.read(buf)
+                if (read == -1) break
+                output.write(buf, 0, read)
+                downloaded += read
+                
+                val now = System.currentTimeMillis()
+                if (now - lastUpdate > 1000) {
+                    val pct = if (totalBytes > 0) ((downloaded * 100) / totalBytes).toInt() else 0
+                    emit(DownloadState.Downloading(pct, downloaded / (1024f * 1024f), totalBytes / (1024f * 1024f)))
+                    lastDebugLog = "DL: $pct% (${downloaded / (1024*1024)}MB)"
+                    lastUpdate = now
+                }
+            }
+            output.close(); input.close()
+            
+            if (file.exists() && file.length() > 50_000_000) {
+                lastDebugLog = "Done: ${file.name}"
+                emit(DownloadState.Success(file))
+            } else {
+                lastDebugLog = "Corrupt: ${file.length()}b"
+                emit(DownloadState.Error("File corrupt or too small"))
+            }
+        } catch (e: Exception) {
+            lastDebugLog = "Ex: ${e.message}"
+            Log.e("MAR_Downloader", "Download failed", e)
+            emit(DownloadState.Error("${e::class.simpleName}: ${e.message}"))
         }
     }.flowOn(Dispatchers.IO)
 
-    fun downloadModel(context: Context): Flow<DownloadState> = flow {
-        val modelDir = getModelDir(context)
-        modelDir.mkdirs()
-        val modelFile = File(modelDir, MODEL_FILENAME)
-
-        val oldFile = File(context.filesDir, MODEL_FILENAME)
-        if (!modelFile.exists() && oldFile.exists() && oldFile.length() > 100 * 1024 * 1024) {
-            oldFile.renameTo(modelFile)
-        }
-
-        if (modelFile.exists() && modelFile.length() > 100 * 1024 * 1024) {
-            emit(DownloadState.Success(modelFile))
-            return@flow
-        }
-
-        val url = URL(MODEL_URL)
-        val result = downloadWithRetry(url, modelFile)
-        if (result != null) {
-            emit(DownloadState.Success(modelFile))
-        } else {
-            if (modelFile.exists()) modelFile.delete()
-            emit(DownloadState.Error("Download failed after retries"))
-        }
-    }.flowOn(Dispatchers.IO)
+    fun downloadModel(context: Context): Flow<DownloadState> = downloadModel(context, 
+        CuratedModel("Default", "Qwen/Qwen2.5-0.5B-Instruct-GGUF", MODEL_FILENAME, 370_000_000L))
     
     fun getLocalModelPath(context: Context): String? {
         val modelDir = getModelDir(context)
-        val file = File(modelDir, MODEL_FILENAME)
-        if (file.exists()) return file.absolutePath
+        val files = modelDir.listFiles { f -> f.name.endsWith(".gguf") }
+        if (files != null && files.isNotEmpty()) return files.first().absolutePath
 
-        // Fallback: old internal filesDir location or Downloads
         val oldFile = File(context.filesDir, MODEL_FILENAME)
         if (oldFile.exists()) return oldFile.absolutePath
 
@@ -141,10 +143,8 @@ object ModelDownloader {
     private fun findGgufRecursive(dir: File, depth: Int): File? {
         if (depth > 3) return null
         val files = dir.listFiles() ?: return null
-        
         val ggufFile = files.firstOrNull { it.isFile && it.name.endsWith(".gguf") }
         if (ggufFile != null) return ggufFile
-        
         for (f in files) {
             if (f.isDirectory) {
                 val found = findGgufRecursive(f, depth + 1)

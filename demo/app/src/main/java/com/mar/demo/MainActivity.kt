@@ -10,6 +10,8 @@ import android.provider.Settings
 import java.io.File
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,6 +28,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -72,7 +75,34 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
+import androidx.activity.result.contract.ActivityResultContracts
+import android.media.projection.MediaProjectionManager
+import com.mar.runtime.agent.vision.ScreenCaptureService
+
+// Global debug log for UI
+var lastDebugLog by mutableStateOf("System Ready")
+
 class MainActivity : ComponentActivity() {
+
+    internal val screenCaptureLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK && result.data != null) {
+            val intent = Intent(this, ScreenCaptureService::class.java).apply {
+                putExtra("RESULT_CODE", result.resultCode)
+                putExtra("RESULT_DATA", result.data)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+            lastDebugLog = "Vision Engine Started"
+        } else {
+            lastDebugLog = "Vision Permission Denied"
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         FileLogger.init(applicationContext)
@@ -137,6 +167,10 @@ private fun ActiveTab() {
     var pickerWfId by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
+    var sandboxAgentId by remember { mutableStateOf<String?>(null) }
+    var sandboxCapabilities by remember { mutableStateOf<List<String>>(emptyList()) }
+    var sandboxYaml by remember { mutableStateOf<String?>(null) }
+
     val enabledAgents = workflows.filter { it.enabled }.map { wf ->
         val modelId = extractModelFromYaml(wf.yaml)
         val modelPath = modelId?.let { modelRepo.findLocalModelPath(it) }
@@ -166,14 +200,60 @@ private fun ActiveTab() {
         }
     )
 
-    ActiveAgentsScreen(
-        enabledAgents = enabledAgents,
-        onRunAgent = { id ->
-            val wf = workflows.find { it.id == id }
-            if (wf != null) {
+    if (sandboxAgentId != null && sandboxYaml != null) {
+        val wf = workflows.find { it.id == sandboxAgentId }
+        com.mar.demo.ui.components.PermissionSandboxDialog(
+            agentName = wf?.name ?: "Unknown Agent",
+            requiredCapabilities = sandboxCapabilities,
+            onConfirm = {
+                MarWorkScheduler(ctx).executeAgentNow(sandboxAgentId!!, yamlWorkflow = sandboxYaml)
+                sandboxAgentId = null
+                sandboxYaml = null
+            },
+            onDismiss = {
+                sandboxAgentId = null
+                sandboxYaml = null
+            }
+        )
+    }
+
+    val runAgentWithSandbox = { id: String ->
+        val wf = workflows.find { it.id == id }
+        if (wf != null) {
+            try {
+                val config = com.mar.agent.sdk.yaml.parser.MarYamlParser().parse(wf.yaml.byteInputStream())
+                val capabilities = mutableListOf<String>()
+                config.tools.forEach { t ->
+                    when (t.name) {
+                        "CalendarQuery" -> capabilities.add("Read Calendar Events")
+                        "ObserveScreen" -> capabilities.add("Screen Capture & OCR")
+                        "NotificationListener" -> capabilities.add("Read Notifications")
+                        "read_sms" -> capabilities.add("Read SMS Messages")
+                        "query_contacts" -> capabilities.add("Read Contacts")
+                        "UITapTool" -> capabilities.add("Automated UI Taps")
+                    }
+                }
+                config.workflow.values.forEach { step ->
+                    if (step.action == "read_sms" && !capabilities.contains("Read SMS Messages")) capabilities.add("Read SMS Messages")
+                    if (step.action == "query_contacts" && !capabilities.contains("Read Contacts")) capabilities.add("Read Contacts")
+                }
+                
+                if (capabilities.isNotEmpty()) {
+                    sandboxAgentId = id
+                    sandboxCapabilities = capabilities.distinct()
+                    sandboxYaml = wf.yaml
+                } else {
+                    MarWorkScheduler(ctx).executeAgentNow(id, yamlWorkflow = wf.yaml)
+                }
+            } catch (e: Exception) {
                 MarWorkScheduler(ctx).executeAgentNow(id, yamlWorkflow = wf.yaml)
             }
-        },
+        }
+    }
+
+    ActiveAgentsScreen(
+        enabledAgents = enabledAgents,
+        onRunAgent = runAgentWithSandbox,
         onViewExecution = { },
         onChangeModel = { pickerWfId = it }
     )
@@ -189,6 +269,25 @@ private fun LibraryTab() {
     var pickerWfId by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { repo.importFromFilesDir() }
+
+    var sandboxAgentId by remember { mutableStateOf<String?>(null) }
+    var sandboxCapabilities by remember { mutableStateOf<List<String>>(emptyList()) }
+    var sandboxYaml by remember { mutableStateOf<String?>(null) }
+
+    var shareQrBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var shareAgentName by remember { mutableStateOf("") }
+
+    val scanLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        com.journeyapps.barcodescanner.ScanContract()
+    ) { result ->
+        if (result.contents != null) {
+            val intent = Intent(ctx, YamlShareActivity::class.java).apply {
+                action = Intent.ACTION_VIEW
+                data = android.net.Uri.parse(result.contents)
+            }
+            ctx.startActivity(intent)
+        }
+    }
 
     val items = workflows.map { wf ->
         val modelId = extractModelFromYaml(wf.yaml)
@@ -218,14 +317,81 @@ private fun LibraryTab() {
         }
     )
 
-    LibraryScreen(
-        items = items,
-        onRun = { id ->
-            val wf = workflows.find { it.id == id }
-            if (wf != null) {
+    if (sandboxAgentId != null && sandboxYaml != null) {
+        val wf = workflows.find { it.id == sandboxAgentId }
+        com.mar.demo.ui.components.PermissionSandboxDialog(
+            agentName = wf?.name ?: "Unknown Agent",
+            requiredCapabilities = sandboxCapabilities,
+            onConfirm = {
+                MarWorkScheduler(ctx).executeAgentNow(sandboxAgentId!!, yamlWorkflow = sandboxYaml)
+                sandboxAgentId = null
+                sandboxYaml = null
+            },
+            onDismiss = {
+                sandboxAgentId = null
+                sandboxYaml = null
+            }
+        )
+    }
+
+    if (shareQrBitmap != null) {
+        AlertDialog(
+            onDismissRequest = { shareQrBitmap = null },
+            title = { Text("Share '${shareAgentName}'") },
+            text = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                    androidx.compose.foundation.Image(
+                        bitmap = shareQrBitmap!!.asImageBitmap(),
+                        contentDescription = "QR Code",
+                        modifier = Modifier.width(250.dp).height(250.dp)
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Text("Scan this with the MAR Library Scanner to import.", style = MaterialTheme.typography.bodySmall, color = MarColors.TextSecondary)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { shareQrBitmap = null }) { Text("Close", color = MarColors.Blue) }
+            }
+        )
+    }
+
+    val runAgentWithSandbox = { id: String ->
+        val wf = workflows.find { it.id == id }
+        if (wf != null) {
+            try {
+                val config = com.mar.agent.sdk.yaml.parser.MarYamlParser().parse(wf.yaml.byteInputStream())
+                val capabilities = mutableListOf<String>()
+                config.tools.forEach { t ->
+                    when (t.name) {
+                        "CalendarQuery" -> capabilities.add("Read Calendar Events")
+                        "ObserveScreen" -> capabilities.add("Screen Capture & OCR")
+                        "NotificationListener" -> capabilities.add("Read Notifications")
+                        "read_sms" -> capabilities.add("Read SMS Messages")
+                        "query_contacts" -> capabilities.add("Read Contacts")
+                        "UITapTool" -> capabilities.add("Automated UI Taps")
+                    }
+                }
+                config.workflow.values.forEach { step ->
+                    if (step.action == "read_sms" && !capabilities.contains("Read SMS Messages")) capabilities.add("Read SMS Messages")
+                    if (step.action == "query_contacts" && !capabilities.contains("Read Contacts")) capabilities.add("Read Contacts")
+                }
+                
+                if (capabilities.isNotEmpty()) {
+                    sandboxAgentId = id
+                    sandboxCapabilities = capabilities.distinct()
+                    sandboxYaml = wf.yaml
+                } else {
+                    MarWorkScheduler(ctx).executeAgentNow(id, yamlWorkflow = wf.yaml)
+                }
+            } catch (e: Exception) {
                 MarWorkScheduler(ctx).executeAgentNow(id, yamlWorkflow = wf.yaml)
             }
-        },
+        }
+    }
+
+    LibraryScreen(
+        items = items,
+        onRun = runAgentWithSandbox,
         onEdit = { id ->
             val intent = Intent(ctx, YamlShareActivity::class.java).apply {
                 putExtra("agent_id", id)
@@ -239,6 +405,27 @@ private fun LibraryTab() {
             val intent = Intent(ctx, YamlShareActivity::class.java)
             ctx.startActivity(intent)
         },
+        onShare = { id ->
+            val wf = workflows.find { it.id == id }
+            if (wf != null) {
+                val bytes = wf.yaml.toByteArray()
+                // GZIP compression to fit inside QR
+                val out = java.io.ByteArrayOutputStream()
+                java.util.zip.GZIPOutputStream(out).use { it.write(bytes) }
+                val encoded = android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP)
+                val qrContent = "mar-agent://install?yaml=${encoded}"
+                shareQrBitmap = com.mar.demo.ui.components.QrGenerator.generate(qrContent, 600)
+                shareAgentName = wf.name
+            }
+        },
+        onScanQr = {
+            scanLauncher.launch(com.journeyapps.barcodescanner.ScanOptions().apply {
+                setDesiredBarcodeFormats(com.journeyapps.barcodescanner.ScanOptions.QR_CODE)
+                setPrompt("Scan a MAR Agent QR Code")
+                setBeepEnabled(false)
+                setOrientationLocked(false)
+            })
+        },
         onChangeModel = { pickerWfId = it }
     )
 }
@@ -248,7 +435,6 @@ private fun SettingsTab() {
     val ctx = LocalContext.current
     val repo = remember { ModelRepository(ctx) }
     val models by repo.getAllFlow().collectAsState(initial = emptyList())
-    val hasModel = models.isNotEmpty()
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(models.isEmpty()) {
@@ -269,6 +455,21 @@ private fun SettingsTab() {
 
         Spacer(Modifier.height(16.dp))
 
+        // DEBUG LOG SECTION
+        GlassCard {
+            Text("Internal Debug Log", style = MaterialTheme.typography.titleMedium, color = MarColors.Orange)
+            Spacer(Modifier.height(8.dp))
+            SelectionContainer {
+                Text(
+                    text = lastDebugLog,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
+                    color = MarColors.TextSecondary
+                )
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
         GlassCard {
             Text(
                 "Permissions",
@@ -283,6 +484,43 @@ private fun SettingsTab() {
             Spacer(Modifier.height(8.dp))
             SettingsButton("Accessibility Service") {
                 ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
+            Spacer(Modifier.height(8.dp))
+
+            val isVisionRunning = ScreenCaptureService.isRunning
+            SettingsButton(if (isVisionRunning) "Stop Vision Engine" else "Enable Vision Engine") {
+                if (isVisionRunning) {
+                    ctx.startService(Intent(ctx, ScreenCaptureService::class.java).apply { action = "STOP" })
+                    lastDebugLog = "Vision Engine Stopped"
+                } else {
+                    val activity = ctx as? MainActivity
+                    val mgr = ctx.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                    activity?.screenCaptureLauncher?.launch(mgr.createScreenCaptureIntent())
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        GlassCard {
+            Text(
+                "Developer Tools",
+                style = MaterialTheme.typography.titleMedium,
+                color = MarColors.TextPrimary
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Use the system prompt below with ChatGPT or Claude to help them generate MAR-compatible YAML workflows.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MarColors.TextSecondary
+            )
+            Spacer(Modifier.height(12.dp))
+            SettingsButton("Copy System Prompt") {
+                val prompt = com.mar.agent.sdk.core.executor.PromptBuilder.MAR_DEVELOPER_META_PROMPT.trimIndent()
+                val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                val clip = android.content.ClipData.newPlainText("MAR Developer Prompt", prompt)
+                clipboard.setPrimaryClip(clip)
+                android.widget.Toast.makeText(ctx, "Developer Prompt copied!", android.widget.Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -334,47 +572,56 @@ private fun SettingsTab() {
             Spacer(Modifier.height(8.dp))
             val curatedModels = remember {
                 listOf(
-                    ModelDownloader.CuratedModel("Gemma 2 2B (Google)", "bartowski/gemma-2-2b-it-GGUF", "gemma-2-2b-it-Q4_K_M.gguf", 1_550_000_000L),
-                    ModelDownloader.CuratedModel("Qwen2.5 0.5B", "Qwen/Qwen2.5-0.5B-Instruct-GGUF", "qwen2.5-0.5b-instruct-q4_k_m.gguf", 370_000_000L),
-                    ModelDownloader.CuratedModel("DeepSeek R1 1.5B", "bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF", "DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf", 1_000_000_000L),
+                    ModelDownloader.CuratedModel("Qwen2.5 0.5B (Fastest)", "Qwen/Qwen2.5-0.5B-Instruct-GGUF", "qwen2.5-0.5b-instruct-q4_k_m.gguf", 390_000_000L),
+                    ModelDownloader.CuratedModel("DeepSeek R1 1.5B (Reasoning)", "bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF", "DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf", 1_100_000_000L),
+                    ModelDownloader.CuratedModel("Gemma 2 2B (Smart)", "bartowski/gemma-2-2b-it-GGUF", "gemma-2-2b-it-Q4_K_M.gguf", 1_600_000_000L),
                 )
             }
             curatedModels.forEach { cm ->
-                val dlState = remember(cm.hfFile) { mutableStateOf<ModelDownloader.DownloadState>(ModelDownloader.DownloadState.Idle) }
+                val dlState = remember { mutableStateOf<ModelDownloader.DownloadState>(ModelDownloader.DownloadState.Idle) }
                 val already = models.any { it.filePath.contains(cm.hfFile) }
-                when (val s = dlState.value) {
-                    is ModelDownloader.DownloadState.Downloading -> {
-                        LinearProgressIndicator(
-                            progress = { s.progressPct / 100f },
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                            color = MarColors.Blue,
-                            trackColor = MarColors.Blue.copy(alpha = 0.15f)
-                        )
-                        Text("${cm.label}: ${"%.0f".format(s.downloadedMb)} / ${"%.0f".format(s.totalMb)} MB (${s.progressPct}%)",
-                            style = MaterialTheme.typography.bodySmall, color = MarColors.TextSecondary)
-                    }
-                    is ModelDownloader.DownloadState.Success -> {
-                        Text("${cm.label} ✓", style = MaterialTheme.typography.bodySmall, color = MarColors.Green)
-                    }
-                    is ModelDownloader.DownloadState.Error -> {
-                        Text("${cm.label}: ${s.message}", style = MaterialTheme.typography.bodySmall, color = MarColors.Red)
-                    }
-                    is ModelDownloader.DownloadState.Idle -> {
+
+                Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(cm.label, style = MaterialTheme.typography.bodyMedium, color = MarColors.TextPrimary)
                         if (already) {
-                            Text("${cm.label} ✓", style = MaterialTheme.typography.bodySmall, color = MarColors.Green)
-                        } else {
-                            SettingsButton("Download ${cm.label}") {
+                            Text("Ready ✓", style = MaterialTheme.typography.bodySmall, color = MarColors.Green)
+                        } else if (dlState.value is ModelDownloader.DownloadState.Idle) {
+                            TextButton(onClick = {
                                 scope.launch {
                                     ModelDownloader.downloadModel(ctx, cm).collect { d ->
                                         dlState.value = d
                                     }
                                     repo.scanAndRegisterModels()
                                 }
+                            }) {
+                                Text("Download", color = MarColors.Blue, style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
+
+                    when (val s = dlState.value) {
+                        is ModelDownloader.DownloadState.Downloading -> {
+                            Spacer(Modifier.height(4.dp))
+                            LinearProgressIndicator(
+                                progress = { s.progressPct / 100f },
+                                modifier = Modifier.fillMaxWidth().height(4.dp),
+                                color = MarColors.Blue,
+                                trackColor = MarColors.Blue.copy(alpha = 0.15f)
+                            )
+                            Text("${"%.1f".format(s.downloadedMb)} / ${"%.1f".format(s.totalMb)} MB (${s.progressPct}%)",
+                                style = MaterialTheme.typography.bodySmall, color = MarColors.TextTertiary)
+                        }
+                        is ModelDownloader.DownloadState.Error -> {
+                            Text("Error: ${s.message}", style = MaterialTheme.typography.bodySmall, color = MarColors.Red)
+                        }
+                        else -> {}
+                    }
                 }
-                Spacer(Modifier.height(4.dp))
             }
         }
 
